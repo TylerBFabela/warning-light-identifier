@@ -1,0 +1,27 @@
+# Python / environments
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Generated or private data: never commit these
+# synthetic images (regenerate with make_synth.py)
+data/
+# real photos of other people's cars (privacy) and downloaded sets (licensing)
+real_val/
+real_test/
+backgrounds/
+# model weights: publish later via GitHub Releases or Hugging Face Hub
+models/
+*.onnx
+.env
+# raw downloads, videos and extracted frames
+raw/
+frames/
+*.mov
+*.mp4
+*.heic
+# generated demo output
+clusters_demo.png
