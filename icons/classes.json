@@ -1,0 +1,15 @@
+{
+  "high_beam": "blue",
+  "headlights": "green",
+  "turn_left": "green",
+  "turn_right": "green",
+  "abs": "amber",
+  "brake_system": "red",
+  "parking_brake": "red",
+  "coolant_temp": "red",
+  "battery": "red",
+  "oil_pressure": "red",
+  "check_engine": "amber",
+  "tire_pressure": "amber",
+  "airbag": "red"
+}

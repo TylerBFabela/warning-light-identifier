@@ -25,3 +25,15 @@ frames/
 *.heic
 # generated demo output
 clusters_demo.png
+
+# icon artwork stays local (licenses); only the class list is committed
+icons/*
+!icons/classes.json
+
+# icon artwork stays local (licenses); only the class list is committed
+icons/*
+!icons/classes.json
+icons_raw/
+# temporary / raw download folders
+temo/
+unedited images/

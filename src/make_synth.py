@@ -50,14 +50,32 @@ def mask_for(fn, size=SIZE):
 
 # ---- real icons -----------------------------------------------------------------------------------
 def mask_from_file(path, size=256):
-    """Icon file -> white-on-black mask. Handles transparent PNGs and dark-on-white / white-on-dark icons."""
-    im = Image.open(path)
-    if im.mode in ("RGBA", "LA") and np.asarray(im.getchannel("A")).std() > 1:
-        m = im.getchannel("A")
+    """Icon file -> white-on-black mask (white = the symbol), cropped to the symbol and centered.
+    Handles: 1) symbol on a transparent background, 2) colored/white symbol on a dark tile,
+    3) dark symbol on a white or light background."""
+    im = Image.open(path).convert("RGBA")
+    arr = np.asarray(im).astype(np.float32)
+    alpha = arr[..., 3] / 255
+    if (alpha < 0.5).mean() > 0.25:
+        # Lots of transparency: the symbol is whatever is NOT transparent.
+        m = Image.fromarray((alpha * 255).astype(np.uint8))
     else:
-        g = im.convert("L")
-        m = ImageOps.invert(g) if np.asarray(g).mean() > 127 else g
-    return ImageOps.autocontrast(ImageOps.pad(m, (size, size), color=0))
+        # A solid picture (a tile): the symbol is whatever differs from the background colour.
+        rgb = arr[..., :3]
+        solid = alpha > 0.5
+        keys = (rgb // 32).astype(int) @ np.array([64, 8, 1])           # coarse colour buckets
+        bg_key = np.bincount(keys[solid]).argmax()                      # most common colour = background
+        bg = rgb[solid & (keys == bg_key)].mean(axis=0)
+        dist = np.sqrt(((rgb - bg) ** 2).sum(axis=2)) * solid           # distance from the background colour
+        m = Image.fromarray(np.clip(dist / max(dist.max(), 1) * 255, 0, 255).astype(np.uint8))
+    box = m.point(lambda v: 255 if v > 32 else 0).getbbox()             # tight box around the symbol
+    if box:
+        m = m.crop(box)
+    inner = int(size * 0.92)                                            # small margin all around
+    m = ImageOps.contain(m, (inner, inner))
+    canvas = Image.new("L", (size, size), 0)
+    canvas.paste(m, ((size - m.width) // 2, (size - m.height) // 2))
+    return ImageOps.autocontrast(canvas)
 
 
 def load_icons(icons_dir):
