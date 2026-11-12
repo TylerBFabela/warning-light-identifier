@@ -18,7 +18,7 @@ model_dir, test_dir = sys.argv[1], sys.argv[2]
 device = get_device()
 model, classes, cfg = load_model(model_dir, device)
 
-ds = datasets.ImageFolder(test_dir, transform=eval_transform(cfg["img"]))
+ds = datasets.ImageFolder(test_dir, transform=eval_transform(cfg["img"]), allow_empty=True)
 to_model_index = {i: classes.index(name) for i, name in enumerate(ds.classes)}   # folder order -> model class order
 
 all_probs, truth = [], []

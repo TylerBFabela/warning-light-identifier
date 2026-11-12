@@ -29,13 +29,10 @@ clusters_demo.png
 # icon artwork stays local (licenses); only the class list is committed
 icons/*
 !icons/classes.json
-
-# icon artwork stays local (licenses); only the class list is committed
-icons/*
-!icons/classes.json
 icons_raw/
 # temporary / raw download folders
 temo/
 unedited images/
 
 crops_to_label/
+finder_failures/
