@@ -27,7 +27,7 @@ def _merge(boxes, gap):
     return boxes
 
 
-def propose_lights(img, min_area=60, margin=0.25, gap_frac=0.08):
+def propose_lights(img, min_area=25, margin=0.25, gap_frac=0.01):
     """Return SQUARE boxes (x0, y0, x1, y1) around bright, saturated blobs (one box per icon).
     Boxes can extend beyond the photo; crop with img.crop(box), which pads with black. Squares avoid stretching."""
     hsv = np.asarray(img.convert("HSV")).astype(np.float32) / 255

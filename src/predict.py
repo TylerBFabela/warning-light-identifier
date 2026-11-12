@@ -12,6 +12,7 @@ from PIL import Image, ImageDraw
 
 from common import eval_transform, get_device, load_model
 from find_lights import propose_lights
+from load_photo import load_photo
 
 ap = argparse.ArgumentParser()
 ap.add_argument("model_dir")
@@ -24,15 +25,17 @@ model, classes, cfg = load_model(a.model_dir, device)
 threshold = a.threshold if a.threshold is not None else cfg["threshold"]
 prepare = eval_transform(cfg["img"])
 
-photo = Image.open(a.photo).convert("RGB")
-photo.thumbnail((1024, 1024))                          # phone photos are huge; a smaller copy is faster
+full = load_photo(a.photo)                             # upright RGB, any common format
+photo = full.copy()
+photo.thumbnail((1024, 1024))                          # find the lights on a small copy (fast)...
+scale = full.width / photo.width
 boxes = propose_lights(photo) or [(0, 0, photo.width, photo.height)]
 annotated = photo.copy()
 pen = ImageDraw.Draw(annotated)
 
 print(f"{len(boxes)} candidate light(s); answers below {threshold:.0%} confidence are shown as 'unsure'")
 for number, box in enumerate(boxes, start=1):
-    crop = photo.crop(box)                             # may extend past the edge: PIL pads with black
+    crop = full.crop(tuple(round(c * scale) for c in box))   # ...but cut the crop from the original photo (more detail)
     with torch.no_grad():
         probs = torch.softmax(model(prepare(crop).unsqueeze(0).to(device)), dim=1)[0].cpu()
     top = probs.topk(min(3, len(classes)))
