@@ -5,3 +5,6 @@ numpy
 scipy
 pymupdf
 pillow-heif
+fastapi 
+uvicorn
+python-multipart

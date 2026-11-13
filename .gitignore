@@ -40,3 +40,6 @@ finder_failures/
 data_*/
 real_dev/
 real_test/
+
+deploy_model/
+real_night/
