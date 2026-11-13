@@ -6,10 +6,10 @@
 <title>Dashboard Light Identifier</title>
 <style>
   :root { --bg:#f6f7f9; --card:#fff; --text:#1c2430; --muted:#5b6675; --line:#d9dee6; --accent:#2457d6;
-          --info:#2457d6; --caution:#b36b00; --warning:#c0262d; --unsure:#7a6a00; }
+          --info:#2457d6; --caution:#b36b00; --warning:#c0262d; --unsure:#7a6a00; --possible:#2f6fb5; }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#12161c; --card:#1b212a; --text:#e8ecf2; --muted:#9aa5b5; --line:#2c3541; --accent:#6f9bff;
-            --info:#6f9bff; --caution:#f0b04a; --warning:#ff6b73; --unsure:#d8c85a; } }
+            --info:#6f9bff; --caution:#f0b04a; --warning:#ff6b73; --unsure:#d8c85a; --possible:#7fb4ff; } }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
   main { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
@@ -22,7 +22,7 @@
   img#photo { max-width:100%; border-radius:8px; display:block; }
   .light h3 { margin:0 0 2px; font-size:1.05rem; }
   .chip { display:inline-block; font-size:.75rem; border:1px solid currentColor; border-radius:99px; padding:0 8px; margin-left:6px; }
-  .info { color:var(--info); } .caution { color:var(--caution); } .warning { color:var(--warning); } .unsure { color:var(--unsure); }
+  .info { color:var(--info); } .caution { color:var(--caution); } .warning { color:var(--warning); } .unsure { color:var(--unsure); } .possible { color:var(--possible); }
   .muted { color:var(--muted); font-size:.9rem; }
   #error { color:var(--warning); }
 </style>
@@ -46,7 +46,7 @@
 
   <p class="muted" id="note"></p>
   <p class="muted">Privacy: the analysis runs on your own device. Your photo is never uploaded. This is a portfolio project, not a safety tool.</p>
-  <p class="muted"><a href="https://github.com/TylerBFabela/warning-light-identifier">Source code, results and limitations</a></p>
+  <p class="muted"><a href="https://github.com/TylerBFabela/warning-light-identifier">Source code, results and limitations</a> · <a href="https://github.com/TylerBFabela/warning-light-identifier/blob/main/ATTRIBUTION.md">Icon credits</a></p>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.wasm.min.js"></script>
 <script src="app.js"></script>

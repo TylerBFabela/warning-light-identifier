@@ -9,6 +9,7 @@ const MARGIN = 0.25;        // empty border added around each light, as a fracti
 const GAP_FRAC = 0.01;      // pieces of one icon closer than this fraction of the image get merged
 const MAX_LIGHTS = 40;      // more spots than this means the photo is not a clean shot of a dashboard
 const MAX_PIXELS = 100_000_000;
+const POSSIBLE_FROM = 0.4;  // below the identify threshold but at least this sure: show a low-confidence guess
 const NOTE = "General information only, not a diagnosis. Your owner's manual is the authority for your car. " +
              "If a warning light is on and you are unsure, have the car checked by a mechanic.";
 
@@ -124,7 +125,8 @@ async function analyze(file) {
       const probs = exps.map((v) => v / total), best = probs.indexOf(Math.max(...probs));
       const guess = classes[best], confidence = probs[best];
       const sure = confidence >= config.threshold && guess !== "none";    // identified only if confident AND a real light
-      lights.push({ id: n + 1, box, status: sure ? "identified" : "unsure", label: sure ? guess : "unsure",
+      const maybe = !sure && guess !== "none" && confidence >= (config.possible_threshold ?? POSSIBLE_FROM);
+      lights.push({ id: n + 1, box, status: sure ? "identified" : maybe ? "possible" : "unsure", label: sure ? guess : "unsure",
                     best_guess: guess, confidence, meaning: sure ? meanings[guess] || null : null });
     });
   }
@@ -138,7 +140,7 @@ function annotate(bitmap, lights) {
   view.ctx.drawImage(bitmap, 0, 0, view.canvas.width, view.canvas.height);
   view.ctx.lineWidth = 3; view.ctx.font = "14px sans-serif";
   for (const l of lights) {
-    view.ctx.strokeStyle = view.ctx.fillStyle = l.status === "identified" ? "#3cc85a" : "#ffaa00";
+    view.ctx.strokeStyle = view.ctx.fillStyle = { identified: "#3cc85a", possible: "#5aa9ff", unsure: "#ffaa00" }[l.status];
     const [x0, y0, x1, y1] = l.box.map((c) => c * k);
     view.ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     view.ctx.fillText(String(l.id), x0 + 4, y0 + 15);
@@ -170,6 +172,11 @@ function show(result) {
       h.append(el("span", "chip " + l.meaning.severity, l.meaning.severity));
       c.append(h, el("p", "", l.meaning.summary), el("p", "", "What to do: " + l.meaning.what_to_do),
                el("p", "muted", `Confidence ${Math.round(l.confidence * 100)}%`));
+    } else if (l.status === "possible") {
+      const h = el("h3", "possible", `${l.id}. Possible match`);
+      h.append(el("span", "chip possible", "low confidence"));
+      const name = (meanings[l.best_guess] || {}).name || l.best_guess;
+      c.append(h, el("p", "", `This might be: ${name} (${Math.round(l.confidence * 100)}% sure). That is not enough to rely on, so no advice is shown. Check your owner's manual.`));
     } else {
       c.append(el("h3", "unsure", `${l.id}. Unsure`),
                el("p", "", "A bright spot is here, but I am not confident what it is. Check your owner's manual."),
