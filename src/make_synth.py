@@ -2,6 +2,7 @@
 
 Usage:  python make_synth.py OUT_DIR PER_CLASS [--icons icons] [--bg backgrounds] [--size 128] [--seed 0]
                              [--hard-negatives] [--lowres] [--centered] [--none-factor 1.0]
+                             [--color-jitter] [--bright-bg] [--labels]
 
 --icons  folder like icons/<class>/*.png plus icons/classes.json ({"battery": "red", ...}).
          Without it, three PLACEHOLDER shapes are used so you can test the pipeline.
@@ -15,10 +16,14 @@ Realism switches (all off by default, so old runs are reproducible; turn them on
                   orange LCD panels, text like AT/AWD, and glare, instead of mostly empty pictures.
 --lowres          images are shrunk to 24-64 px and blown back up, like the small crops the light finder cuts out.
 --centered        the icon sits near the middle at about 2/3 of the crop, like the finder's crops (it centers its box).
+--color-jitter    LED colors vary within their family (orange..yellow-amber, lime..green, pinkish..pure red) instead of one fixed RGB.
+--bright-bg       some backgrounds are pale blue-gray with a gradient, like glare on the cluster glass.
+--labels          brake_system and parking_brake sometimes get their printed word (BRAKE / PARK) under the icon, as many cars do.
 --none-factor     make this many times more "none" images than per-class images (none is the broadest class).
 """
 import argparse
 import io
+import colorsys
 import json
 import math
 import random
@@ -28,6 +33,9 @@ import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 SIZE = 128
+OPTIONS = {"color_jitter": False, "bright_bg": False}      # switched on by generate(); read by the drawing helpers
+HUE_RANGES = {"red": (-0.03, 0.025), "amber": (0.06, 0.14), "green": (0.24, 0.42), "blue": (0.55, 0.66)}   # hue as a 0..1 turn
+LABELS = {"brake_system": "BRAKE", "parking_brake": "PARK"}
 COLORS = {"red": (230, 40, 40), "amber": (255, 170, 0), "green": (40, 200, 90), "blue": (60, 120, 255)}
 
 
@@ -107,6 +115,15 @@ def load_extra_icons(icons_dir):
     return [mask_from_file(f) for f in sorted((Path(icons_dir) / "none").glob("*.png"))]
 
 
+def lit_rgb(color, brightness=1.0):
+    """RGB for an LED of this color family. With --color-jitter the hue and saturation vary within the family."""
+    if not OPTIONS["color_jitter"]:
+        return tuple(int(c * brightness) for c in COLORS[color])
+    lo, hi = HUE_RANGES[color]
+    r, g, b = colorsys.hsv_to_rgb(random.uniform(lo, hi) % 1.0, random.uniform(0.65, 1.0), min(1.0, brightness))
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
 # ---- scene pieces ---------------------------------------------------------------------------------
 def background(size, bg_files):
     if bg_files and random.random() < 0.7:
@@ -115,8 +132,14 @@ def background(size, bg_files):
         s = random.randint(max(8, min(w, h) // 3), min(w, h))
         x, y = random.randint(0, w - s), random.randint(0, h - s)
         return ImageEnhance.Brightness(im.crop((x, y, x + s, y + s)).resize((size, size))).enhance(random.uniform(0.2, 0.6))
-    base = random.randint(8, 55)
-    bg = Image.new("RGB", (size, size), (base, base, base + random.randint(0, 12)))
+    if OPTIONS["bright_bg"] and random.random() < 0.4:     # pale bluish-gray glare with a gradient
+        base = random.randint(70, 150)
+        row = np.linspace(0, random.uniform(-40, 40), size)[None, :, None] * np.ones((size, size, 3))
+        tint = np.array([-random.randint(0, 20), 0, random.randint(10, 35)])
+        bg = Image.fromarray(np.clip(base + row + tint, 0, 255).astype(np.uint8))
+    else:
+        base = random.randint(8, 55)
+        bg = Image.new("RGB", (size, size), (base, base, base + random.randint(0, 12)))
     d = ImageDraw.Draw(bg)
     for _ in range(random.randint(0, 5)):  # distractors: gauge arcs, ticks, text-like bars
         x, y = random.randint(-20, size), random.randint(-20, size)
@@ -133,17 +156,18 @@ def warp(m):
     return m.transform(m.size, Image.PERSPECTIVE, coeffs, Image.BICUBIC)
 
 
-def place_icon(bg, mask, color, brightness, size=SIZE, centered=False):
+def place_icon(bg, mask, color, brightness, size=SIZE, centered=False, shrink=1.0, lift=0):
     # centered=True mimics the light finder: its square box sits on the icon, which fills about 2/3 of the crop
-    s = int(size * (random.uniform(0.55, 0.75) if centered else random.uniform(0.45, 0.8)))
+    s = int(size * (random.uniform(0.55, 0.75) if centered else random.uniform(0.45, 0.8)) * shrink)
     m = warp(mask.resize((s, s)).rotate(random.uniform(-12, 12)))
-    col = tuple(int(c * brightness) for c in COLORS[color])
+    col = lit_rgb(color, brightness)
     layer = Image.new("RGB", (s, s), col)
     if centered:
         x = min(max((size - s) // 2 + random.randint(-size // 8, size // 8), 0), size - s)
         y = min(max((size - s) // 2 + random.randint(-size // 8, size // 8), 0), size - s)
     else:
         x, y = random.randint(0, size - s), random.randint(0, size - s)
+    y = max(0, y - lift)                                   # lift = leave room for a printed word below the icon
     out = bg.copy()
     bloom = m.filter(ImageFilter.GaussianBlur(max(2, s * random.uniform(0.04, 0.10)))).point(lambda v: int(v * 0.6))
     out.paste(layer, (x, y), bloom)                                                       # LED glow
@@ -199,7 +223,9 @@ def _paste_lit(img, mask, rgb):
 
 
 def _lit_color(names=("red", "amber", "green", "blue")):
-    return tuple(int(c * random.uniform(0.7, 1.0)) for c in COLORS[random.choice(names)])
+    if OPTIONS["color_jitter"]:
+        return lit_rgb(random.choice(names), random.uniform(0.7, 1.0))
+    return tuple(int(c * random.uniform(0.7, 1.0)) for c in COLORS[random.choice(names)])   # original behavior (a little tint noise)
 
 
 def random_glyph(size=256):
@@ -340,6 +366,17 @@ def hard_negative(img, extra, icon_set, centered):
     return {"stripe": neg_stripe, "needle": neg_needle, "lcd": neg_lcd, "text": neg_text, "glare": neg_glare}[kind](img)
 
 
+def add_label(img, word, color):
+    """Print a word (BRAKE / PARK) under the icon in the icon's color, like many dashboards do."""
+    m = Image.new("L", img.size, 0)
+    try:
+        ImageDraw.Draw(m).text((img.width // 2 + random.randint(-4, 4), int(img.height * 0.84)), word, fill=255,
+                               font=_font(int(img.height * random.uniform(0.13, 0.18))), anchor="mm")
+    except (ValueError, TypeError):
+        return img
+    return _paste_lit(img, m, lit_rgb(color, random.uniform(0.75, 1.0)))
+
+
 def degrade(img, size=SIZE, lowres=False):
     if random.random() < 0.4:  # glare
         glare = Image.new("RGB", img.size, (0, 0, 0))
@@ -360,8 +397,10 @@ def degrade(img, size=SIZE, lowres=False):
 
 
 def generate(out_dir, per_class, icons=None, bg_dir=None, size=SIZE, seed=0,
-             hard_negatives=False, lowres=False, centered=False, none_factor=1.0):
+             hard_negatives=False, lowres=False, centered=False, none_factor=1.0,
+             color_jitter=False, bright_bg=False, labels=False):
     random.seed(seed); np.random.seed(seed)
+    OPTIONS["color_jitter"], OPTIONS["bright_bg"] = color_jitter, bright_bg
     out = Path(out_dir)
     bg_files = sorted(p for p in Path(bg_dir).glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}) if bg_dir else []
     icon_set = load_icons(icons) if icons else {n: ([mask_for(fn)], c) for n, (fn, c) in CLASSES.items()}
@@ -372,7 +411,11 @@ def generate(out_dir, per_class, icons=None, bg_dir=None, size=SIZE, seed=0,
     for name, (masks, color) in icon_set.items():
         (out / name).mkdir(parents=True, exist_ok=True)
         for i in range(per_class):
-            img = place_icon(background(size, bg_files), random.choice(masks), color, random.uniform(0.75, 1.0), size, centered)
+            if labels and name in LABELS and random.random() < 0.5:
+                img = place_icon(background(size, bg_files), random.choice(masks), color, random.uniform(0.75, 1.0), size, centered, shrink=0.8, lift=size // 10)
+                img = add_label(img, LABELS[name], color)
+            else:
+                img = place_icon(background(size, bg_files), random.choice(masks), color, random.uniform(0.75, 1.0), size, centered)
             degrade(img, size, lowres).save(out / name / f"{i:05d}.jpg")
         counts[name] = per_class
     (out / "none").mkdir(parents=True, exist_ok=True)
@@ -399,5 +442,7 @@ if __name__ == "__main__":
     ap.add_argument("--icons"); ap.add_argument("--bg"); ap.add_argument("--size", type=int, default=SIZE); ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--hard-negatives", action="store_true"); ap.add_argument("--lowres", action="store_true")
     ap.add_argument("--centered", action="store_true"); ap.add_argument("--none-factor", type=float, default=1.0)
+    ap.add_argument("--color-jitter", action="store_true"); ap.add_argument("--bright-bg", action="store_true"); ap.add_argument("--labels", action="store_true")
     a = ap.parse_args()
-    print(generate(a.out_dir, a.per_class, a.icons, a.bg, a.size, a.seed, a.hard_negatives, a.lowres, a.centered, a.none_factor))
+    print(generate(a.out_dir, a.per_class, a.icons, a.bg, a.size, a.seed, a.hard_negatives, a.lowres, a.centered, a.none_factor,
+                   a.color_jitter, a.bright_bg, a.labels))
