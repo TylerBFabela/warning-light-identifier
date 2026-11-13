@@ -43,3 +43,5 @@ real_test/
 
 deploy_model/
 real_night/
+
+!docs/model/model.onnx

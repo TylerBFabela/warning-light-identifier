@@ -1,0 +1,5 @@
+{
+  "arch": "small_cnn",
+  "img": 96,
+  "threshold": 0.9
+}
