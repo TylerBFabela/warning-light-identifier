@@ -6,7 +6,6 @@
   "abs": "amber",
   "brake_system": "red",
   "parking_brake": "red",
-  "coolant_temp": "red",
   "battery": "red",
   "oil_pressure": "red",
   "check_engine": "amber",

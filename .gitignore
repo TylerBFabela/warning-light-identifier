@@ -36,3 +36,7 @@ unedited images/
 
 crops_to_label/
 finder_failures/
+
+data_*/
+real_dev/
+real_test/
