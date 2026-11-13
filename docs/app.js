@@ -87,7 +87,13 @@ function makeCanvas(width, height) {
   return { canvas, ctx };
 }
 
-async function analyze(file) {
+function wholePhotoBox(width, height) {
+  // "Close-up" mode: the whole photo is the light. Pad it to a square so it is not stretched.
+  const side = Math.max(width, height);
+  return [Math.floor((width - side) / 2), Math.floor((height - side) / 2), Math.floor((width - side) / 2) + side, Math.floor((height - side) / 2) + side];
+}
+
+async function analyze(file, single) {
   let bitmap;
   try { bitmap = await createImageBitmap(file); }                  // also applies the photo's rotation information
   catch (err) { throw new Error("This browser cannot open that file. Try a JPEG or PNG photo."); }
@@ -96,7 +102,8 @@ async function analyze(file) {
   const k = Math.min(1, DETECT_SIDE / Math.max(bitmap.width, bitmap.height));
   const small = makeCanvas(Math.max(1, Math.round(bitmap.width * k)), Math.max(1, Math.round(bitmap.height * k)));
   small.ctx.drawImage(bitmap, 0, 0, small.canvas.width, small.canvas.height);          // the small copy used for detection
-  const found = proposeLights(small.ctx.getImageData(0, 0, small.canvas.width, small.canvas.height));
+  const found = single ? [wholePhotoBox(small.canvas.width, small.canvas.height)]       // close-up: skip the finder
+                       : proposeLights(small.ctx.getImageData(0, 0, small.canvas.width, small.canvas.height));
   found.sort((a, b) => Math.floor(a[1] / 40) - Math.floor(b[1] / 40) || a[0] - b[0]);  // rows about 40 px tall, left to right
   if (found.length > MAX_LIGHTS) {
     throw new Error(`Found ${found.length} bright spots, more than a dashboard normally shows. Try a straighter, closer photo of just the instrument cluster.`);
@@ -208,7 +215,7 @@ $("go").addEventListener("click", async () => {
   if (!file) return;
   $("go").disabled = true; $("error").textContent = ""; $("status").textContent = "Analyzing..."; $("result").hidden = true;
   try {
-    const result = await analyze(file);
+    const result = await analyze(file, $("single").checked);
     window.__lastResult = result;                     // kept so automated tests can read the answers
     show(result); $("status").textContent = "";
   } catch (err) {
