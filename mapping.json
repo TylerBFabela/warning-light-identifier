@@ -1,0 +1,12 @@
+{
+  "Anti Lock Braking System": "abs",
+  "Braking System Issue": "brake_system",
+  "Charging System Issue": "battery",
+  "Check Engine": "check_engine",
+  "Low Tire Pressure Warning Light": "tire_pressure",
+  "SRS-Airbag": "airbag",
+  "Low Engine Oil Warning Light": "to_check_oil",
+  "Electronic Stability Problem -ESP-": "none",
+  "Engine Overheating Warning Light": "none",
+  "Master warning light": "none"
+}

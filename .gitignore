@@ -46,3 +46,5 @@ real_night/
 !docs/model/model.onnx
 
 kaggle_dashboard/
+
+external_*/

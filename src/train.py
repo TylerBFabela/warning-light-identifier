@@ -48,6 +48,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("data_dir")
     ap.add_argument("--arch", default="small_cnn")
+    ap.add_argument("--pretrained", action="store_true", help="start from ImageNet weights")
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--img", type=int, default=96)
     ap.add_argument("--batch", type=int, default=64)
@@ -70,7 +71,7 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=a.batch, num_workers=0)
 
     # 2) Model, loss, optimizer, learning-rate schedule.
-    model = build_model(a.arch, len(classes)).to(device)
+    model = build_model(a.arch, len(classes), pretrained=a.pretrained).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
@@ -112,7 +113,7 @@ def main():
     torch.save(model.state_dict(), out / "model.pt")
     (out / "classes.json").write_text(json.dumps(classes))
     (out / "config.json").write_text(json.dumps({"arch": a.arch, "img": a.img, "mean": MEAN, "std": STD, "best_epoch": best_epoch,
-                                                 "seed": a.seed, "lr": a.lr, "batch": a.batch, "params": n_params, "threshold": 0.8}, indent=2))
+                                                 "seed": a.seed, "lr": a.lr, "batch": a.batch, "params": n_params, "pretrained": a.pretrained, "threshold": 0.8}, indent=2))
     (out / "metrics.json").write_text(json.dumps(history, indent=2))
     print(f"saved the best epoch ({best_epoch}) to {out}/")
 
