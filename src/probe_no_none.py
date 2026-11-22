@@ -20,7 +20,7 @@ device = get_device()
 model, classes, cfg = load_model(model_dir, device)
 none_index = classes.index("none")
 
-ds = datasets.ImageFolder(test_dir, transform=eval_transform(cfg["img"]))
+ds = datasets.ImageFolder(test_dir, transform=eval_transform(cfg["img"]), allow_empty=True)
 to_model_index = {i: classes.index(name) for i, name in enumerate(ds.classes)}
 
 all_probs, truth = [], []

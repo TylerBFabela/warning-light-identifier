@@ -30,10 +30,11 @@ import random
 from pathlib import Path
 
 import numpy as np
+from scipy import ndimage
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 SIZE = 128
-OPTIONS = {"color_jitter": False, "bright_bg": False}      # switched on by generate(); read by the drawing helpers
+OPTIONS = {"color_jitter": False, "bright_bg": False, "styles": False}      # switched on by generate(); read by the drawing helpers
 HUE_RANGES = {"red": (-0.03, 0.025), "amber": (0.06, 0.14), "green": (0.24, 0.42), "blue": (0.55, 0.66)}   # hue as a 0..1 turn
 LABELS = {"brake_system": "BRAKE", "parking_brake": "PARK"}
 COLORS = {"red": (230, 40, 40), "amber": (255, 170, 0), "green": (40, 200, 90), "blue": (60, 120, 255)}
@@ -107,6 +108,55 @@ def load_icons(icons_dir):
         out[cls] = ([mask_from_file(f) for f in files], color)
     return out
 
+# ---- drawing styles: the same symbol drawn solid, as an outline, or with bolder or lighter strokes -------
+def filled_version(m):
+    """Solid drawing: fill every enclosed gap, but keep marks that sit inside a shape (a '!', a 'P', letters, plus and minus) as cut-outs."""
+    filled = ndimage.binary_fill_holes(m)
+    shape_labels, n_shapes = ndimage.label(m, structure=np.ones((3, 3)))
+    gap_labels, _ = ndimage.label(~m)
+    outside = gap_labels[0, 0]                                   # the canvas corner is always plain background
+    for i in range(1, n_shapes + 1):
+        part = shape_labels == i
+        if part.sum() < 4:
+            continue                                             # a speck, not a mark
+        touching = np.unique(gap_labels[ndimage.binary_dilation(part) & ~m])
+        if outside not in touching:                              # touches only enclosed gaps: it is a mark inside a shape
+            filled &= ~part
+    return filled
+
+
+def hollow_version(m, rim):
+    """Outline drawing: keep only a rim of `rim` pixels around each shape."""
+    return m & ~ndimage.binary_erosion(m, iterations=rim) # TODO 1: the shape minus the same shape shrunk by `rim` pixels (hint: ndimage.binary_erosion(m, iterations=rim) shrinks a shape)
+
+
+def style_variant(mask):
+    """Redraw one icon mask in another common style (solid, outline, bolder or lighter). The symbol itself stays the same."""
+    m = np.asarray(mask) > 127
+    roll = random.random()
+    if roll < 0.25:
+        m = filled_version(m)
+    elif roll < 0.50:
+        rim = max(1, round(random.uniform(0.02, 0.045) * m.shape[0]))    # TODO 2: a random rim width between 2% and 4.5% of the mask's height, at least 1 pixel (hint: random.uniform, round, max)
+        m = hollow_version(m, rim)
+    grow = random.choice([-1, 0, 0, 1, 2]) * max(1, m.shape[0] // 128)       # strokes a little lighter or bolder
+    if grow > 0:
+        m = ndimage.binary_dilation(m, iterations=grow)
+    elif grow < 0:
+        m = ndimage.binary_erosion(m, iterations=-grow)
+    if m.sum() == 0:
+        return mask                                              # the change erased the icon: keep the original
+    return Image.fromarray((m * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1))
+
+def is_word(mask):
+    """True for a text-only icon such as BRAKE: much wider than tall. No second word is printed under it."""
+    box = mask.getbbox()
+    return box is not None and (box[2] - box[0]) > 1.8 * (box[3] - box[1])
+
+def pick_mask(masks):
+    """One drawing of a class. With --styles it may be redrawn solid or as an outline (see style_variant)."""
+    mask = random.choice(masks)
+    return style_variant(mask) if OPTIONS["styles"] else mask
 
 def load_extra_icons(icons_dir):
     """Optional icons/none/*.png: real symbols that are not one of the known classes (used as lit negatives)."""
@@ -398,9 +448,9 @@ def degrade(img, size=SIZE, lowres=False):
 
 def generate(out_dir, per_class, icons=None, bg_dir=None, size=SIZE, seed=0,
              hard_negatives=False, lowres=False, centered=False, none_factor=1.0,
-             color_jitter=False, bright_bg=False, labels=False):
+             color_jitter=False, bright_bg=False, labels=False, styles=False):
     random.seed(seed); np.random.seed(seed)
-    OPTIONS["color_jitter"], OPTIONS["bright_bg"] = color_jitter, bright_bg
+    OPTIONS["color_jitter"], OPTIONS["bright_bg"], OPTIONS["styles"] = color_jitter, bright_bg, styles
     out = Path(out_dir)
     bg_files = sorted(p for p in Path(bg_dir).glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}) if bg_dir else []
     icon_set = load_icons(icons) if icons else {n: ([mask_for(fn)], c) for n, (fn, c) in CLASSES.items()}
@@ -411,11 +461,14 @@ def generate(out_dir, per_class, icons=None, bg_dir=None, size=SIZE, seed=0,
     for name, (masks, color) in icon_set.items():
         (out / name).mkdir(parents=True, exist_ok=True)
         for i in range(per_class):
-            if labels and name in LABELS and random.random() < 0.5:
-                img = place_icon(background(size, bg_files), random.choice(masks), color, random.uniform(0.75, 1.0), size, centered, shrink=0.8, lift=size // 10)
+            use_label = labels and name in LABELS and random.random() < 0.5
+            bg = background(size, bg_files)
+            mask = pick_mask(masks)
+            if use_label and not is_word(mask):                    # a word icon (BRAKE, PARK) never gets a second word under it
+                img = place_icon(bg, mask, color, random.uniform(0.75, 1.0), size, centered, shrink=0.8, lift=size // 10)
                 img = add_label(img, LABELS[name], color)
             else:
-                img = place_icon(background(size, bg_files), random.choice(masks), color, random.uniform(0.75, 1.0), size, centered)
+                img = place_icon(bg, mask, color, random.uniform(0.75, 1.0), size, centered)
             degrade(img, size, lowres).save(out / name / f"{i:05d}.jpg")
         counts[name] = per_class
     (out / "none").mkdir(parents=True, exist_ok=True)
@@ -435,7 +488,6 @@ def generate(out_dir, per_class, icons=None, bg_dir=None, size=SIZE, seed=0,
     counts["none"] = n_none
     return counts
 
-
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir"); ap.add_argument("per_class", type=int)
@@ -443,6 +495,7 @@ if __name__ == "__main__":
     ap.add_argument("--hard-negatives", action="store_true"); ap.add_argument("--lowres", action="store_true")
     ap.add_argument("--centered", action="store_true"); ap.add_argument("--none-factor", type=float, default=1.0)
     ap.add_argument("--color-jitter", action="store_true"); ap.add_argument("--bright-bg", action="store_true"); ap.add_argument("--labels", action="store_true")
+    ap.add_argument("--styles", action="store_true")
     a = ap.parse_args()
     print(generate(a.out_dir, a.per_class, a.icons, a.bg, a.size, a.seed, a.hard_negatives, a.lowres, a.centered, a.none_factor,
-                   a.color_jitter, a.bright_bg, a.labels))
+                   a.color_jitter, a.bright_bg, a.labels, a.styles))
