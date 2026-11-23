@@ -54,3 +54,13 @@ check_icons/
 own_car_probe.txt
 
 sheet_*.png
+
+# never commit photos, crops, icons, weights or archives by accident
+# (if the website later needs an image, add an exception such as !docs/assets/*.png)
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.svg
+*.pt
+*.zip

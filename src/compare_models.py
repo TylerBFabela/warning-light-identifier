@@ -103,3 +103,17 @@ for penalty in (0, 0.5, 1, 1.5, 2, 3):
     sure = named & (conf >= SURE)                               # what the website would show as "identified"
     print(f"{penalty:8.1f} {((guess == truth) & ~is_none).sum():13d} {(named & is_none).sum():13d} "
           f"{sure.sum():18d} {(sure & (guess != truth)).sum():15d}")
+
+
+SITE_PENALTY = 1.0                               # the none penalty the website uses (docs/model/config.json)
+lp = cache[MATRIX_FOR][0].copy()
+lp[:, none] -= SITE_PENALTY
+lp = lp - np.log(np.exp(lp).sum(1, keepdims=True))
+p_none, guess = np.exp(lp[:, none]), lp.argmax(1)
+print(f"\n5. HIDING SPOTS CALLED 'none' ({MATRIX_FOR}, penalty {SITE_PENALTY}): hide only when 'none' confidence >= cutoff")
+print(f"{'cutoff':>7s} {'junk hidden':>12s} {'real lights hidden':>19s}   hidden lights by class")
+for cutoff in (0.5, 0.6, 0.7, 0.8, 0.9, 0.95):
+    hidden = (guess == none) & (p_none >= cutoff)
+    lost = hidden & ~is_none
+    names = ", ".join(f"{classes[c]} {n}" for c, n in enumerate(np.bincount(truth[lost], minlength=len(classes))) if n)
+    print(f"{cutoff:7.2f} {(hidden & is_none).sum():8d}/{is_none.sum():<3d} {lost.sum():12d}/{(~is_none).sum():<5d}   {names}")

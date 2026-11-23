@@ -79,7 +79,7 @@ def build_model(arch, n_classes, pretrained=False):
     if arch == "mobilenet_v3_small":
         weights = models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 if pretrained else None   # None = random start
         net = models.mobilenet_v3_small(weights=weights)
-        net.classifier = nn.Sequential(nn.Dropout(0.3), nn.Linear(net.classifier[0].in_features, n_classes))       # TODO: our own head, so the network gives n_classes outputs instead of 1000
+        net.classifier = nn.Sequential(nn.Dropout(0.3), nn.Linear(net.classifier[0].in_features, n_classes)) 
         return net
     if arch == "small_resnet":
         return SmallResNet(n_classes)

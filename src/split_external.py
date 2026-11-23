@@ -18,12 +18,12 @@ crops = sorted(source_dir.rglob("*.jpg"))
 
 
 def photo_id(path):
-    return path.name.split("_")[1]      # TODO 1: the 4-digit photo number from the file name (hint: path.name.split("_") cuts the name at each underscore)
+    return path.name.split("_")[1] 
 
 
 photos = sorted({photo_id(p) for p in crops})
 random.Random(0).shuffle(photos)                 # fixed seed: the same split every time you run it
-dev_photos = set(photos[:len(photos) // 2])    # TODO 2: a set holding the first half of the shuffled photos (hint: slicing, len(photos) // 2)
+dev_photos = set(photos[:len(photos) // 2]) 
 
 counts = {"dev": {}, "test": {}}
 for crop in crops:

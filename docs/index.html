@@ -25,6 +25,17 @@
   .info { color:var(--info); } .caution { color:var(--caution); } .warning { color:var(--warning); } .unsure { color:var(--unsure); } .possible { color:var(--possible); }
   .muted { color:var(--muted); font-size:.9rem; }
   #error { color:var(--warning); }
+  #frame { position:relative; display:inline-block; max-width:100%; }
+  #frame.drawing { cursor:crosshair; touch-action:none; }          /* on phones: drag draws instead of scrolling */
+  #frame.drawing img { outline:3px solid #d97cff; }
+  #band { position:absolute; border:2px dashed #d97cff; background:rgba(217,124,255,.15); pointer-events:none; }
+  .legend span { white-space:nowrap; margin-right:12px; }
+  .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .muted-title { color:var(--muted); }
+  details.card summary { cursor:pointer; font-weight:600; }
+  details.card .card { margin:12px 0 0; }
+  .tools { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin-top:12px; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
 </style>
 </head>
 <body>
@@ -41,7 +52,20 @@
   </div>
 
   <div id="result" hidden>
-    <div class="card"><img id="photo" alt="Your photo with numbered boxes around each light found"></div>
+    <div class="card">
+      <div id="frame"><img id="photo" alt="Your photo with numbered boxes around each light found"><div id="band" hidden></div></div>
+      <p class="muted legend">
+        <span><i class="swatch" style="background:#3cc85a"></i>identified</span>
+        <span><i class="swatch" style="background:#5aa9ff"></i>possible</span>
+        <span><i class="swatch" style="background:#ffaa00"></i>unsure</span>
+        <span><i class="swatch" style="border:1px dashed #999"></i>probably not a warning light</span>
+        <span><i class="swatch" style="background:#d97cff"></i>your box</span>
+      </p>
+      <div class="tools">
+        <button id="draw" class="secondary">Draw a box around a light</button>
+        <span id="drawhint" class="muted" hidden>Drag a box around one light on the photo above.</span>
+      </div>
+    </div>
     <div id="lights"></div>
   </div>
 

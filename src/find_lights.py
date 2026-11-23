@@ -8,8 +8,9 @@ from PIL import Image, ImageDraw
 from scipy import ndimage
 
 
-def _merge(boxes, gap):
-    """Merge boxes that overlap or sit within `gap` pixels of each other (parts of one icon)."""
+def _merge(boxes, gap, cap=None):
+    """Merge boxes that overlap or sit within `gap` pixels of each other (parts of one icon).
+    With `cap`, two boxes are not merged if the result would be wider or taller than `cap` pixels (too big for one light)."""
     boxes = [list(b) for b in boxes]
     changed = True
     while changed:
@@ -18,7 +19,10 @@ def _merge(boxes, gap):
             for j in range(i + 1, len(boxes)):
                 a, b = boxes[i], boxes[j]
                 if a[0] - gap <= b[2] and b[0] - gap <= a[2] and a[1] - gap <= b[3] and b[1] - gap <= a[3]:
-                    boxes[i] = [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
+                    union = [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
+                    if cap is not None and max(union[2] - union[0], union[3] - union[1]) > cap:
+                        continue                                          # would be too big for one light: keep them apart
+                    boxes[i] = union
                     del boxes[j]
                     changed = True
                     break
@@ -27,18 +31,35 @@ def _merge(boxes, gap):
     return boxes
 
 
-def propose_lights(img, min_area=25, margin=0.25, gap_frac=0.01):
+def propose_lights(img, min_area=25, margin=0.25, gap_frac=0.005, sat=0.5, val=0.45,
+                   max_side_frac=None, sparse_frac=0.10, merge_cap_frac=None, white_core=False):
     """Return SQUARE boxes (x0, y0, x1, y1) around bright, saturated blobs (one box per icon).
-    Boxes can extend beyond the photo; crop with img.crop(box), which pads with black. Squares avoid stretching."""
+    Boxes can extend beyond the photo; crop with img.crop(box), which pads with black. Squares avoid stretching.
+    The options after val are off by default (the original behaviour); fractions are of the photo's shorter side:
+      max_side_frac   drop a blob wider or taller than this (gauge backlight, big arcs, skin)
+      sparse_frac     drop a blob bigger than this that fills less than 15% of its box (needles, scale arcs)
+      merge_cap_frac  never merge pieces into a box bigger than this (stops neighbouring lights chaining together)
+      white_core      count a white, over-exposed center as part of the colored light around it"""
     hsv = np.asarray(img.convert("HSV")).astype(np.float32) / 255
-    mask = (hsv[..., 1] > 0.5) & (hsv[..., 2] > 0.45)   # colorful and bright
+    mask = (hsv[..., 1] > sat) & (hsv[..., 2] > val)     # colorful and bright
+    if white_core:
+        white = (hsv[..., 2] > 0.85) & ~mask
+        mask = ndimage.binary_propagation(mask, mask=mask | white)   # white pixels joined to colored ones
     labels, _ = ndimage.label(mask)
+    short = min(img.size)
     raw = []
-    for ys, xs in ndimage.find_objects(labels):
-        if (ys.stop - ys.start) * (xs.stop - xs.start) >= min_area:
-            raw.append((xs.start, ys.start, xs.stop, ys.stop))
+    for n, (ys, xs) in enumerate(ndimage.find_objects(labels), start=1):
+        h, w = ys.stop - ys.start, xs.stop - xs.start
+        if h * w < min_area:
+            continue
+        if max_side_frac is not None and max(h, w) > max_side_frac * short:
+            continue
+        if sparse_frac is not None and max(h, w) > sparse_frac * short and (labels[ys, xs] == n).mean() < 0.15:
+            continue
+        raw.append((xs.start, ys.start, xs.stop, ys.stop))
+    cap = merge_cap_frac * short if merge_cap_frac is not None else None
     boxes = []
-    for x0, y0, x1, y1 in _merge(raw, gap=int(gap_frac * min(img.size))):
+    for x0, y0, x1, y1 in _merge(raw, gap=int(gap_frac * short), cap=cap):
         side = int(max(x1 - x0, y1 - y0) * (1 + 2 * margin))   # square, with a margin around the icon
         cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
         sx, sy = cx - side // 2, cy - side // 2

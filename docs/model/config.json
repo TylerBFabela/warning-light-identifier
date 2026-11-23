@@ -2,5 +2,7 @@
   "arch": "mobilenet_v3_small",
   "img": 96,
   "threshold": 0.9,
-  "none_penalty": 1.0
+  "none_penalty": 1.0,
+  "possible_threshold": 0.4,
+  "collapse_none_from": 0.8
 }

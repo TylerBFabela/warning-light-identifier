@@ -30,15 +30,15 @@ with torch.no_grad():
         truth += [to_model_index[int(i)] for i in yb]
 probs, truth = np.concatenate(all_probs), np.array(truth)
 
-is_light = truth != none_index   # TODO 1: True for crops whose TRUE class is not none (hint: compare truth with none_index)
+is_light = truth != none_index 
 is_none = ~is_light
 print(f"real lights: {is_light.sum()}   true none crops: {is_none.sum()}")
 
 # ---- Question 1: ignore 'none' ----
 normal_guess = probs.argmax(axis=1)
-without_none = probs.copy()                  # copy, so the original probs stay untouched for Question 2
-without_none[:, none_index] = 0         # TODO 2: what number makes the none column unable to win an argmax?
-no_none_guess = without_none.argmax(axis=1)    # TODO 3: the best class per row, now that none cannot win
+without_none = probs.copy()        
+without_none[:, none_index] = 0    
+no_none_guess = without_none.argmax(axis=1)
 top3 = np.argsort(-without_none, axis=1)[:, :3]
 
 print("\nQUESTION 1: accuracy on the real lights only")
@@ -56,7 +56,7 @@ for penalty in (0, 1, 2, 3, 4, 6):
     shifted[:, none_index] -= penalty
     guess = shifted.argmax(axis=1)
     lights_right = (guess[is_light] == truth[is_light]).mean()
-    false_alarms = (guess[is_none] != none_index).mean()  # TODO 4: fraction of the true-none crops whose guess is NOT none
+    false_alarms = (guess[is_none] != none_index).mean()
     print(f"{penalty:8d} {lights_right:13.3f} {false_alarms:26.3f}")
 
 # ---- Per class: where does the signal live? ----
@@ -65,9 +65,9 @@ print(f"{'class':15s} {'crops':>5s} {'right now':>9s} {'none ignored':>12s} {'in
 for c in np.unique(truth[is_light]):
     rows = truth == c                                    # True for crops whose real class is c
     right_now = (normal_guess[rows] == c).sum()
-    right_no_none = (no_none_guess[rows] == c).sum()                                  # TODO A: same as the line above, but using no_none_guess
+    right_no_none = (no_none_guess[rows] == c).sum()                         
     in_best_3 = sum(c in top3[i] for i in np.where(rows)[0])
-    common_guess = np.bincount(no_none_guess[rows], minlength=len(classes)).argmax()                                  # TODO B: the most common value in no_none_guess[rows]
+    common_guess = np.bincount(no_none_guess[rows], minlength=len(classes)).argmax()       
     print(f"{classes[c]:15s} {rows.sum():5d} {right_now:9d} {right_no_none:12d} {in_best_3:9d}   {classes[common_guess]}")
 
 # ---- What does each real class get called? (none ignored) ----
@@ -75,7 +75,7 @@ print("\nWHAT EACH REAL CLASS GETS CALLED (none ignored)")
 for c in np.unique(truth[is_light]):
     rows = truth == c
     counts = np.bincount(no_none_guess[rows], minlength=len(classes))
-    ranked = np.argsort(-counts)        # TODO: class numbers sorted by count, biggest first (hint: np.argsort(-counts))
+    ranked = np.argsort(-counts)  
     parts = [f"{classes[k]} {counts[k]}" for k in ranked if counts[k] > 0]
     print(f"{classes[c]:15s} ({rows.sum():2d}):  " + ", ".join(parts))
 
@@ -89,8 +89,8 @@ def sharpness(path):
     laplacian = 4 * g[1:-1, 1:-1] - g[:-2, 1:-1] - g[2:, 1:-1] - g[1:-1, :-2] - g[1:-1, 2:]
     return laplacian.var()
 
-paths = [p for p, _ in ds.samples]        # TODO 1: the file path of every crop (hint: ds.samples is a list of (path, class_number) pairs)
-sharp = np.array([sharpness(p) for p in paths])        # TODO 2: an np.array with sharpness(path) for every path
+paths = [p for p, _ in ds.samples]     
+sharp = np.array([sharpness(p) for p in paths])  
 side = np.array([Image.open(p).size[0] for p in paths])   # width in pixels of each saved crop
 median_sharp = np.median(sharp[is_light])
 print(f"\nIS BLUR THE REASON?  (real lights only, split at the median sharpness {median_sharp:.0f})")
