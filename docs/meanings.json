@@ -1,6 +1,6 @@
 {
   "high_beam": {"name": "High beams on", "severity": "info", "summary": "Your high-beam headlights are on.", "what_to_do": "Switch to low beams when other drivers are ahead or approaching.", "source": "to verify"},
-  "headlights": {"name": "Headlights on", "severity": "info", "summary": "Your low-beam headlights are on.", "what_to_do": "Nothing needed.", "source": "to verify"},
+    "headlights": {"name": "Exterior lights on", "severity": "info", "summary": "Your headlights or side lights are on.", "what_to_do": "Nothing needed.", "source": "to verify"},
   "turn_left": {"name": "Left turn signal", "severity": "info", "summary": "The left turn signal (or hazard lights) is on.", "what_to_do": "Turn it off once you have finished turning. If it blinks very fast, a bulb may have failed.", "source": "to verify"},
   "turn_right": {"name": "Right turn signal", "severity": "info", "summary": "The right turn signal (or hazard lights) is on.", "what_to_do": "Turn it off once you have finished turning. If it blinks very fast, a bulb may have failed.", "source": "to verify"},
   "abs": {"name": "Anti-lock brakes (ABS)", "severity": "caution", "summary": "The anti-lock braking system has a fault, or is switched off.", "what_to_do": "Your normal brakes usually still work, but ABS may not help in a hard stop. Drive carefully and have it checked soon.", "source": "to verify"},

@@ -18,9 +18,10 @@ GROUPS = {                                       # name -> model folders (severa
     "v3": ["models/v3"],
     "v4": ["models/v4_pre", "models/v4_pre_s1", "models/v4_pre_s2"],
     "v5a": ["models/v5a_s0", "models/v5a_s1", "models/v5a_s2"],
+    "v5b": ["models/v5b_s0", "models/v5b_s1", "models/v5b_s2"],
 }
 SETS = ["external_dev", "real_dev", "real_test", "real_night"]
-MATRIX_FOR = "models/v5a_s1"                     # the model whose confusion matrix is printed
+MATRIX_FOR = "models/v5b_s1"                     # the model whose confusion matrix is printed
 SURE = 0.9                                       # the website's "identified" cutoff
 SHORT = {"abs": "abs", "airbag": "air", "battery": "bat", "brake_system": "brk", "check_engine": "eng", "headlights": "hdl",
          "high_beam": "hib", "none": "non", "oil_pressure": "oil", "parking_brake": "prk", "tire_pressure": "tir",

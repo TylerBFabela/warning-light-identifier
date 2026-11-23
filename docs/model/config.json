@@ -1,5 +1,6 @@
 {
-  "arch": "small_cnn",
+  "arch": "mobilenet_v3_small",
   "img": 96,
-  "threshold": 0.9
+  "threshold": 0.9,
+  "none_penalty": 1.0
 }

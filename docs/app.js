@@ -128,6 +128,8 @@ async function analyze(file, single) {
     const logits = output.logits.data, nClasses = classes.length;
     boxes.forEach((box, n) => {
       const row = Array.from(logits.slice(n * nClasses, (n + 1) * nClasses));
+      const noneIndex = classes.indexOf("none");
+      if (noneIndex >= 0) row[noneIndex] -= config.none_penalty ?? 0;   // same 'none' penalty as compare_models.py section 4
       const top = Math.max(...row), exps = row.map((v) => Math.exp(v - top)), total = exps.reduce((a, b) => a + b, 0);
       const probs = exps.map((v) => v / total), best = probs.indexOf(Math.max(...probs));
       const guess = classes[best], confidence = probs[best];

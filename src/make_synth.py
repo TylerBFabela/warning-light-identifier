@@ -124,11 +124,9 @@ def filled_version(m):
             filled &= ~part
     return filled
 
-
 def hollow_version(m, rim):
     """Outline drawing: keep only a rim of `rim` pixels around each shape."""
-    return m & ~ndimage.binary_erosion(m, iterations=rim) # TODO 1: the shape minus the same shape shrunk by `rim` pixels (hint: ndimage.binary_erosion(m, iterations=rim) shrinks a shape)
-
+    return m & ~ndimage.binary_erosion(m, iterations=rim) 
 
 def style_variant(mask):
     """Redraw one icon mask in another common style (solid, outline, bolder or lighter). The symbol itself stays the same."""
@@ -137,7 +135,7 @@ def style_variant(mask):
     if roll < 0.25:
         m = filled_version(m)
     elif roll < 0.50:
-        rim = max(1, round(random.uniform(0.02, 0.045) * m.shape[0]))    # TODO 2: a random rim width between 2% and 4.5% of the mask's height, at least 1 pixel (hint: random.uniform, round, max)
+        rim = max(1, round(random.uniform(0.02, 0.045) * m.shape[0]))
         m = hollow_version(m, rim)
     grow = random.choice([-1, 0, 0, 1, 2]) * max(1, m.shape[0] // 128)       # strokes a little lighter or bolder
     if grow > 0:
