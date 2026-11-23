@@ -36,6 +36,12 @@
   details.card .card { margin:12px 0 0; }
   .tools { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin-top:12px; }
   button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  fieldset.mode { border:0; padding:0; margin:12px 0 0; }
+  fieldset.mode legend { font-size:.9rem; color:var(--muted); padding:0; margin-bottom:4px; }
+  fieldset.mode label { display:block; margin:2px 0; }
+  #known summary { cursor:pointer; font-weight:600; }
+  #knownlist h4 { margin:12px 0 4px; font-size:.95rem; }
+  #knownlist ul { margin:0; padding-left:20px; }
 </style>
 </head>
 <body>
@@ -46,11 +52,21 @@
   <div class="card">
     <input id="file" type="file" accept="image/*">
     <button id="go" disabled>Identify lights</button>
-    <p class="muted"><label><input type="checkbox" id="single"> This photo is a close-up of one light (skips the light finder)</label></p>
+    <fieldset class="mode">
+      <legend>What is in your photo?</legend>
+      <label><input type="radio" name="mode" value="dashboard" checked> The whole dashboard: find the lights for me</label>
+      <label><input type="radio" name="mode" value="single"> One light, up close</label>
+    </fieldset>
     <p id="status" class="muted"></p>
     <p id="error"></p>
   </div>
 
+  <details class="card" id="known">
+    <summary>Which lights can it recognize?</summary>
+    <div id="knownlist"></div>
+    <p class="muted">Any other light (for example traction control, seat belt or engine temperature) is shown as "unsure" or
+      "probably not a warning light". Your owner's manual lists every light in your car.</p>
+  </details>
   <div id="result" hidden>
     <div class="card">
       <div id="frame"><img id="photo" alt="Your photo with numbered boxes around each light found"><div id="band" hidden></div></div>

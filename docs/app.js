@@ -128,6 +128,20 @@ function judge(probs) {
            meaning: status === "identified" ? meanings[guess] || null : null };
 }
 
+function renderKnownLights() {
+  // The list of lights the model can name, built from the same files the model uses, so it always matches the model.
+  const groups = [["warning", "Serious: stop safely or get it checked soon"], ["caution", "Have it checked, or act on it"], ["info", "Information only"]];
+  const list = $("knownlist"); list.replaceChildren();
+  for (const [severity, title] of groups) {
+    const names = classes.filter((c) => c !== "none" && (meanings[c] || {}).severity === severity).map((c) => meanings[c].name);
+    if (!names.length) continue;
+    const ul = el("ul");
+    for (const n of names) ul.append(el("li", "", n));
+    list.append(el("h4", severity, title), ul);
+  }
+  $("known").querySelector("summary").textContent = `Which lights can it recognize? (${classes.length - 1})`;
+}
+
 async function classify(bitmap, boxes) {
   // Cut each box from the ORIGINAL photo (more detail), prepare it like the training images, and run the model.
   if (!boxes.length) return [];
@@ -313,6 +327,7 @@ async function start() {
   try {
     [classes, config, meanings] = await Promise.all(["model/classes.json", "model/config.json", "meanings.json"].map((u) => fetch(u).then((r) => r.json())));
     ort.env.wasm.numThreads = 1;                      // plain WebAssembly: works on every host, no special server settings
+    renderKnownLights();
     session = await ort.InferenceSession.create("model/model.onnx", { executionProviders: ["wasm"] });
     $("status").textContent = "";
     $("go").disabled = !$("file").files.length;
@@ -329,7 +344,8 @@ $("go").addEventListener("click", async () => {
   $("go").disabled = true; $("error").textContent = ""; $("status").textContent = "Analyzing..."; $("result").hidden = true;
   setDrawMode(false);
   try {
-    current = await analyze(file, $("single").checked);
+    const single = document.querySelector('input[name="mode"]:checked').value === "single";
+    current = await analyze(file, single);
     window.__lastResult = current;                    // kept so automated tests can read the answers
     show(current); $("status").textContent = "";
   } catch (err) {
