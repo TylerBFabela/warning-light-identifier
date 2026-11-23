@@ -64,3 +64,6 @@ sheet_*.png
 *.svg
 *.pt
 *.zip
+
+# the two sample photos the website offers (my own car, chosen to share)
+!docs/samples/*.jpg
