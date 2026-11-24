@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Telltale: dashboard warning light identifier</title>
 <meta name="description" content="Take a photo of your car's dashboard: Telltale finds each lit warning light and names the ones it knows, privately in your browser.">
+<script>
+  // Pick the color theme before the page is drawn, so it never flashes the wrong one:
+  // the choice saved on this device, or else the device's own light/dark setting.
+  (function () {
+    let saved = null;
+    try { saved = localStorage.getItem("theme"); } catch (e) { /* storage blocked: use the device setting */ }
+    document.documentElement.dataset.theme = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
@@ -17,12 +26,12 @@
           --panel:#0e141d; --panel-2:#1a2535; --panel-text:#eef2f7; --panel-muted:#aab5c5;
           --info:#2457d6; --ok:#1a7f37; --possible:#2f6fb5; --unsure:#8a6d00; --caution:#b36b00; --warning:#c0262d;
           --display:"Barlow Semi Condensed", system-ui, sans-serif;
-          --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.05); }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0f141b; --card:#18202a; --text:#e8ecf2; --muted:#a3adbb; --line:#2a3440;
+          --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.05); color-scheme:light; }
+  /* dark mode: set by the button at the top right, or by the device's setting (see the script above) */
+  :root[data-theme="dark"] { --bg:#0f141b; --card:#18202a; --text:#e8ecf2; --muted:#a3adbb; --line:#2a3440;
             --ink:#e8ecf2; --on-ink:#10141a; --focus:#7fb4ff; --panel:#080c12; --panel-2:#121b28;
             --info:#7fb4ff; --ok:#4cc970; --possible:#7fb4ff; --unsure:#d8c85a; --caution:#f0b04a; --warning:#ff6b73;
-            --shadow:0 1px 2px rgba(0,0,0,.4); } }
+            --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark; }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
@@ -39,7 +48,13 @@
 
   /* the dark band at the top, like an instrument panel at night */
   .hero { background:radial-gradient(120% 140% at 85% 0%, var(--panel-2), var(--panel) 60%); color:var(--panel-text); padding:34px 0 30px; }
-  .brand { display:flex; gap:16px; align-items:center; }
+  .hero .wrap { position:relative; }
+  .brand { display:flex; gap:16px; align-items:center; padding-right:52px; }    /* room for the theme button */
+  .theme { position:absolute; top:0; right:16px; width:40px; height:40px; padding:0; display:grid; place-items:center;
+           background:rgba(255,255,255,.08); color:var(--panel-text); border:1px solid rgba(255,255,255,.22); border-radius:10px; }
+  .theme:hover { background:rgba(255,255,255,.16); }
+  .theme .sun, :root[data-theme="dark"] .theme .moon { display:none; }   /* show the moon in light mode, the sun in dark mode */
+  :root[data-theme="dark"] .theme .sun { display:block; }
   .brand svg { flex:none; }
   .hero .eyebrow { color:var(--panel-muted); margin:0; }
   .hero h1 { font-size:3rem; font-weight:700; line-height:1; margin:2px 0 0; letter-spacing:.01em; }
@@ -83,26 +98,31 @@
 
   /* results */
   .photo-wrap { text-align:center; background:#0b0f15; border-radius:10px; }
-  #frame { position:relative; display:inline-block; max-width:100%; vertical-align:top; }
+  #frame { position:relative; display:inline-block; max-width:100%; vertical-align:top; overflow:hidden; border-radius:10px; }   /* overflow: keeps the dimming inside the photo */
   #frame img { max-width:100%; max-height:70vh; border-radius:10px; display:block; }
   #frame.drawing { cursor:crosshair; touch-action:none; }          /* on phones: drag draws instead of scrolling */
-  #frame.drawing img { outline:3px solid #d97cff; }
+  #frame.drawing img { outline:3px solid #d97cff; outline-offset:-3px; }
   #band { position:absolute; border:2px dashed #d97cff; background:rgba(217,124,255,.15); pointer-events:none; }
-  #hl { position:absolute; border:3px solid #fff; box-shadow:0 0 0 2px #000, 0 0 12px rgba(255,255,255,.8); border-radius:4px; pointer-events:none; }
+  /* the highlighted light: a white outline, and everything else on the photo dimmed (the huge shadow) */
+  #hl { position:absolute; border:3px solid #fff; border-radius:4px; pointer-events:none;
+        box-shadow:0 0 0 2px rgba(0,0,0,.85), 0 0 0 9999px rgba(0,0,0,.6); }
+  #hl.pop::after { content:""; position:absolute; inset:-3px; border:3px solid #fff; border-radius:6px; animation:ripple .7s ease-out 2; }
+  @keyframes ripple { from { transform:scale(1); opacity:.9; } to { transform:scale(2.4); opacity:0; } }
   .legend { margin:12px 0 0; }
   .legend span { white-space:nowrap; margin-right:12px; }
   .swatch { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
   .tools { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin-top:12px; }
   #summary { margin:6px 0 16px; }
   #summary .found { margin:0 0 8px; font-weight:600; }
+  #summary .hint { margin:10px 0 0; }
   .pills { display:flex; flex-wrap:wrap; gap:8px; }
   .pill { display:inline-flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line); border-radius:99px; padding:5px 13px 5px 11px; font-size:.95rem; }
   .pill-dot { width:9px; height:9px; border-radius:50%; background:currentColor; }   /* only the dot takes the result's color */
   .pill-text { color:var(--text); }
   .pill b { font-family:var(--display); font-size:1.1rem; font-weight:700; }
-  .mine { color:#d97cff; }
+  .yours { color:#d97cff; }
   .light h3 { margin:0 0 4px; font-size:1.25rem; font-weight:600; }
-  .light { cursor:default; }
+  .light { cursor:pointer; }
   .light.linked { border-color:var(--text); }
   .chip { display:inline-block; font-family:system-ui,sans-serif; font-size:.75rem; font-weight:600; border:1px solid currentColor; border-radius:99px; padding:0 8px; margin-left:6px; vertical-align:3px; }
   .ok { color:var(--ok); } .info { color:var(--info); } .caution { color:var(--caution); } .warning { color:var(--warning); } .unsure { color:var(--unsure); } .possible { color:var(--possible); }
@@ -111,7 +131,7 @@
   details.card .card { margin:12px 0 0; box-shadow:none; }
   @keyframes rise { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
   #lights > .card { animation:rise .25s ease-out both; }
-  @media (prefers-reduced-motion: reduce) { #lights > .card, .spinner { animation:none; } html { scroll-behavior:auto; } }
+  @media (prefers-reduced-motion: reduce) { #lights > .card, .spinner, #hl.pop::after { animation:none; } html { scroll-behavior:auto; } }
 
   /* the information sections */
   .steps { list-style:none; padding:0; margin:0 0 14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
@@ -144,6 +164,11 @@
         <h1>Telltale</h1>
       </div>
     </div>
+    <button id="theme" class="theme" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
+      <svg class="moon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="currentColor"/></svg>
+      <svg class="sun" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/>
+        <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
     <p class="tagline">Take a photo of your dashboard. Telltale finds each lit warning light and tells you what it means.</p>
     <ul class="key" aria-label="What the colors of warning lights usually mean">
       <li><i class="dot red"></i>Red: serious, stop safely</li>
@@ -170,11 +195,11 @@
       </div>
       <fieldset class="mode">
         <legend>What is in your photo?</legend>
-        <label><input type="radio" name="mode" value="dashboard" checked> The whole dashboard: find the lights for me</label>
+        <label><input type="radio" name="mode" value="dashboard" checked> The whole dashboard: find the lights automatically</label>
         <label><input type="radio" name="mode" value="single"> One light, up close</label>
       </fieldset>
       <div class="samples row">
-        <span class="muted">No photo at hand? Try one of mine:</span>
+        <span class="muted">No photo at hand? Try a sample:</span>
         <button class="sample" data-src="samples/sample_gauge.jpg" data-name="one gauge">One gauge</button>
         <button class="sample" data-src="samples/sample_startup.jpg" data-name="busy dashboard at start-up">Busy dashboard</button>
       </div>
@@ -238,7 +263,7 @@
   <section id="limits">
     <h2>Limits</h2>
     <div class="card limits">
-      <p>It is a learning project, not a safety tool. On the dashboard photos I tested it on, it named about 3 in 4 lights, and when it said
+      <p>It is a learning project, not a safety tool. On the dashboard photos it was tested on, it named about 3 in 4 lights, and when it said
         "identified" it was right every time. Those photos also guided its design, so expect lower results on cars it has not seen.</p>
       <ul>
         <li>Bright daylight washes out the colors of the lights, so it can miss them: use "Draw a box".</li>
@@ -249,8 +274,8 @@
   </section>
 
   <footer id="about">
-    <p><strong>About this project.</strong> I built it to learn how a machine-learning product is made from start to finish: generating
-      training data, training and testing a model, and running it privately in your browser.</p>
+    <p><strong>About this project.</strong> Telltale is a learning project about how a machine-learning product is made from start to
+      finish: generating training data, training and testing a model, and running it privately in your browser.</p>
     <p class="muted"><a href="https://github.com/TylerBFabela/warning-light-identifier">Source code</a> ·
       <a href="https://github.com/TylerBFabela/warning-light-identifier/blob/main/EXPERIMENTS.md">How it was tested</a> ·
       <a href="https://github.com/TylerBFabela/warning-light-identifier/blob/main/ATTRIBUTION.md">Icon credits</a></p>

@@ -220,11 +220,11 @@ function card(l) {
   // One result card. Only "identified" lights get advice; everything else says how unsure it is.
   const c = el("div", "card light");
   c.tabIndex = 0;                                                  // reachable with the keyboard too
-  const on = () => { c.classList.add("linked"); showHighlight(l.drawn || l.box); };
-  const off = () => { c.classList.remove("linked"); $("hl").hidden = true; };
-  c.addEventListener("mouseenter", on); c.addEventListener("mouseleave", off);
-  c.addEventListener("focus", on); c.addEventListener("blur", off);
-  c.addEventListener("click", () => { $("frame").scrollIntoView({ behavior: "smooth", block: "center" }); on(); });
+  const box = l.drawn || l.box;
+  c.addEventListener("mouseenter", () => preview(c, box)); c.addEventListener("mouseleave", endPreview);
+  c.addEventListener("focus", () => preview(c, box)); c.addEventListener("blur", endPreview);
+  c.addEventListener("click", () => pin(c, box));                 // a click keeps the light marked on the photo
+  c.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pin(c, box); } });
   const label = l.user ? `Your box ${l.id}:` : `${l.id}.`;
   if (l.status === "identified" && l.meaning) {
     const h = el("h3", l.meaning.severity, `${label} ${l.meaning.name}`);
@@ -241,23 +241,56 @@ function card(l) {
              el("p", "muted", `${pct(l.none_prob)} sure this is something else (a needle, text, glare or a light it does not know). ${candidates(l)}`));
   } else if (l.best_guess === "none") {
     c.append(el("h3", "unsure", `${label} Unsure, probably not a warning light`),
-             el("p", "", `This bright spot is probably something else (a needle, text or glare), but I am only ${pct(l.none_prob)} sure. If it is a warning light, check your owner's manual.`),
+             el("p", "", `This bright spot is probably something else (a needle, text or glare), but Telltale is only ${pct(l.none_prob)} sure. If it is a warning light, check your owner's manual.`),
              el("p", "muted", candidates(l)));
   } else {
     c.append(el("h3", "unsure", `${label} Unsure`),
-             el("p", "", "Something is lit here, but I am not confident what it is. Check your owner's manual."),
+             el("p", "", "Something is lit here, but Telltale is not confident what it is. Check your owner's manual."),
              el("p", "muted", candidates(l)));
   }
   return c;
 }
 
-function showHighlight(box) {
-  // Outline one box on the photo on screen (the picture is scaled to fit, so convert from photo pixels).
-  const r = $("photo").getBoundingClientRect(), f = r.width / current.bitmap.width, hl = $("hl");
-  const [x0, y0, x1, y1] = box.map((c) => c * f);
-  Object.assign(hl.style, { left: `${x0}px`, top: `${y0}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
-  hl.hidden = false;
+// ---- linking result cards to their light on the photo ---------------------------------------------------
+// Pointing at a card (mouse or keyboard) marks its light for a moment. Clicking or tapping a card "pins" it: the light
+// stays marked until another card is clicked, the same card is clicked again, the photo is clicked, or Esc is pressed.
+let pinned = null;                                     // { card, box } of the pinned card, or null
+let shownBox = null;                                   // the box marked on the photo right now
+
+function showHighlight(box, pop = false) {
+  // Outline one box and dim the rest of the photo. Positions are percentages of the photo,
+  // so the mark stays in the right place when the page is resized.
+  const [x0, y0, x1, y1] = box, W = current.bitmap.width, H = current.bitmap.height, hl = $("hl");
+  Object.assign(hl.style, { left: `${(x0 / W) * 100}%`, top: `${(y0 / H) * 100}%`,
+                            width: `${((x1 - x0) / W) * 100}%`, height: `${((y1 - y0) / H) * 100}%` });
+  hl.hidden = false; shownBox = box;
+  hl.classList.remove("pop");                                    // only a click gets the ripple, not pointing
+  if (pop) { void hl.offsetWidth; hl.classList.add("pop"); }    // (reading offsetWidth restarts the animation)
 }
+
+function hideHighlight() { $("hl").hidden = true; shownBox = null; }
+
+function markCard(c) {
+  document.querySelectorAll(".light.linked").forEach((other) => other.classList.remove("linked"));
+  if (c) c.classList.add("linked");
+}
+
+function preview(c, box) { markCard(c); showHighlight(box); }
+
+function endPreview() {
+  // Back to the pinned light if there is one, otherwise nothing is marked.
+  if (pinned) { markCard(pinned.card); if (shownBox !== pinned.box) showHighlight(pinned.box); }
+  else { markCard(null); hideHighlight(); }
+}
+
+function pin(c, box) {
+  if (pinned && pinned.card === c) { unpin(); return; }          // clicking the same card again clears it
+  pinned = { card: c, box };
+  markCard(c); showHighlight(box, true);
+  $("frame").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function unpin() { pinned = null; endPreview(); }
 
 function renderSummary(view) {
   // "Found 12 lit spots in your photo", then one capsule per kind of result: a colored dot, the count and a label.
@@ -265,7 +298,7 @@ function renderSummary(view) {
   const kinds = [["identified", "identified", "ok"], ["possible", "possible", "possible"], ["unsure", "unsure", "unsure"],
                  ["other", "probably not lights", "muted-title"]];
   const pills = kinds.filter(([s]) => count(s)).map(([s, label, cls]) => [count(s), label, cls]);
-  if (view.userBoxes.length) pills.push([view.userBoxes.length, "drawn by you", "mine"]);
+  if (view.userBoxes.length) pills.push([view.userBoxes.length, "drawn by you", "yours"]);
   const n = view.lights.length, box = $("summary"); box.replaceChildren();
   box.append(el("p", "found", n ? `Found ${n} lit spot${n === 1 ? "" : "s"} in your photo` : "No lit spots found."));
   const row = el("div", "pills");
@@ -276,17 +309,18 @@ function renderSummary(view) {
     row.append(pill);
   }
   box.append(row);
+  if (n || view.userBoxes.length) box.append(el("p", "muted hint", "Click or tap a result to mark it on the photo."));
 }
 
 function show(view) {
   $("photo").src = annotate(view);
-  $("hl").hidden = true;
+  pinned = null; hideHighlight();
   renderSummary(view);
   const box = $("lights"); box.replaceChildren();
   const main = view.lights.filter((l) => l.status !== "other"), others = view.lights.filter((l) => l.status === "other");
   const order = { identified: 0, possible: 1, unsure: 2 };
-  if (!view.lights.length) box.append(Object.assign(el("div", "card"), { textContent: "I could not find any lit lights. If you can see one, draw a box around it below." }));
-  else if (!main.length) box.append(Object.assign(el("div", "card"), { textContent: "Nothing here looks like a warning light. If one is lit, draw a box around it below." }));
+  if (!view.lights.length) box.append(Object.assign(el("div", "card"), { textContent: "No lit lights were found. If you can see one, use \"Draw a box around a light\" above." }));
+  else if (!main.length) box.append(Object.assign(el("div", "card"), { textContent: "Nothing here looks like a warning light. If one is lit, use \"Draw a box around a light\" above." }));
   for (const l of [...view.userBoxes].reverse()) box.append(card(l));                   // your own boxes first, newest on top
   for (const l of [...main].sort((a, b) => order[a.status] - order[b.status] || Number(a.id) - Number(b.id))) box.append(card(l));
   if (others.length) {
@@ -304,6 +338,7 @@ let drawing = false, dragStart = null;
 
 function setDrawMode(on) {
   drawing = on;
+  if (on) unpin();
   $("frame").classList.toggle("drawing", on);
   $("draw").textContent = on ? "Cancel drawing" : "Draw a box around a light";
   $("drawhint").hidden = !on;
@@ -341,6 +376,8 @@ $("frame").addEventListener("pointerup", async (e) => {
   $("lights").firstElementChild.scrollIntoView({ behavior: "smooth", block: "nearest" });   // bring the new answer into view
 });
 $("draw").addEventListener("click", () => setDrawMode(!drawing));
+$("frame").addEventListener("click", () => { if (!drawing && pinned) unpin(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && pinned) unpin(); });
 
 // ---- the page --------------------------------------------------------------------------------------------
 function renderKnownLights() {
@@ -355,6 +392,27 @@ function renderKnownLights() {
     group.append(el("h3", severity, title), ul);
     list.append(group);
   }
+}
+
+function setupThemeButton() {
+  // The button at the top right switches between light and dark, and remembers the choice on this device.
+  // Until someone presses it, the page follows the device's own setting (chosen by the script in index.html).
+  const root = document.documentElement, b = $("theme"), deviceDark = matchMedia("(prefers-color-scheme: dark)");
+  const label = () => {
+    const next = root.dataset.theme === "dark" ? "light" : "dark";
+    b.setAttribute("aria-label", `Switch to ${next} mode`); b.title = `Switch to ${next} mode`;
+  };
+  b.addEventListener("click", () => {
+    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) { /* storage blocked: the choice lasts until the page closes */ }
+    label();
+  });
+  deviceDark.addEventListener("change", (e) => {                 // the device switched (e.g. at sunset) and no choice was saved
+    let saved = null;
+    try { saved = localStorage.getItem("theme"); } catch (err) { /* storage blocked */ }
+    if (!saved) { root.dataset.theme = e.matches ? "dark" : "light"; label(); }
+  });
+  label();
 }
 
 function watchSections() {
@@ -426,5 +484,6 @@ for (const b of document.querySelectorAll("button.sample")) {
     } catch (err) { $("error").textContent = "Could not load the sample photo."; }
   });
 }
+setupThemeButton();
 watchSections();
 start();
