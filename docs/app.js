@@ -128,20 +128,6 @@ function judge(probs) {
            meaning: status === "identified" ? meanings[guess] || null : null };
 }
 
-function renderKnownLights() {
-  // The list of lights the model can name, built from the same files the model uses, so it always matches the model.
-  const groups = [["warning", "Serious: stop safely or get it checked soon"], ["caution", "Have it checked, or act on it"], ["info", "Information only"]];
-  const list = $("knownlist"); list.replaceChildren();
-  for (const [severity, title] of groups) {
-    const names = classes.filter((c) => c !== "none" && (meanings[c] || {}).severity === severity).map((c) => meanings[c].name);
-    if (!names.length) continue;
-    const ul = el("ul");
-    for (const n of names) ul.append(el("li", "", n));
-    list.append(el("h4", severity, title), ul);
-  }
-  $("known").querySelector("summary").textContent = `Which lights can it recognize? (${classes.length - 1})`;
-}
-
 async function classify(bitmap, boxes) {
   // Cut each box from the ORIGINAL photo (more detail), prepare it like the training images, and run the model.
   if (!boxes.length) return [];
@@ -233,6 +219,12 @@ function candidates(l) {
 function card(l) {
   // One result card. Only "identified" lights get advice; everything else says how unsure it is.
   const c = el("div", "card light");
+  c.tabIndex = 0;                                                  // reachable with the keyboard too
+  const on = () => { c.classList.add("linked"); showHighlight(l.drawn || l.box); };
+  const off = () => { c.classList.remove("linked"); $("hl").hidden = true; };
+  c.addEventListener("mouseenter", on); c.addEventListener("mouseleave", off);
+  c.addEventListener("focus", on); c.addEventListener("blur", off);
+  c.addEventListener("click", () => { $("frame").scrollIntoView({ behavior: "smooth", block: "center" }); on(); });
   const label = l.user ? `Your box ${l.id}:` : `${l.id}.`;
   if (l.status === "identified" && l.meaning) {
     const h = el("h3", l.meaning.severity, `${label} ${l.meaning.name}`);
@@ -259,8 +251,37 @@ function card(l) {
   return c;
 }
 
+function showHighlight(box) {
+  // Outline one box on the photo on screen (the picture is scaled to fit, so convert from photo pixels).
+  const r = $("photo").getBoundingClientRect(), f = r.width / current.bitmap.width, hl = $("hl");
+  const [x0, y0, x1, y1] = box.map((c) => c * f);
+  Object.assign(hl.style, { left: `${x0}px`, top: `${y0}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
+  hl.hidden = false;
+}
+
+function renderSummary(view) {
+  // "Found 12 lit spots in your photo", then one capsule per kind of result: a colored dot, the count and a label.
+  const count = (s) => view.lights.filter((l) => l.status === s).length;
+  const kinds = [["identified", "identified", "ok"], ["possible", "possible", "possible"], ["unsure", "unsure", "unsure"],
+                 ["other", "probably not lights", "muted-title"]];
+  const pills = kinds.filter(([s]) => count(s)).map(([s, label, cls]) => [count(s), label, cls]);
+  if (view.userBoxes.length) pills.push([view.userBoxes.length, "drawn by you", "mine"]);
+  const n = view.lights.length, box = $("summary"); box.replaceChildren();
+  box.append(el("p", "found", n ? `Found ${n} lit spot${n === 1 ? "" : "s"} in your photo` : "No lit spots found."));
+  const row = el("div", "pills");
+  for (const [k, label, cls] of pills) {
+    const pill = el("span", "pill " + cls), words = el("span", "pill-text");
+    words.append(el("b", "", String(k)), " " + label);
+    pill.append(el("i", "pill-dot"), words);
+    row.append(pill);
+  }
+  box.append(row);
+}
+
 function show(view) {
   $("photo").src = annotate(view);
+  $("hl").hidden = true;
+  renderSummary(view);
   const box = $("lights"); box.replaceChildren();
   const main = view.lights.filter((l) => l.status !== "other"), others = view.lights.filter((l) => l.status === "other");
   const order = { identified: 0, possible: 1, unsure: 2 };
@@ -322,36 +343,88 @@ $("frame").addEventListener("pointerup", async (e) => {
 $("draw").addEventListener("click", () => setDrawMode(!drawing));
 
 // ---- the page --------------------------------------------------------------------------------------------
+function renderKnownLights() {
+  // The list of lights the model can name, built from the same files the model uses, so it always matches the model.
+  const groups = [["warning", "Serious: stop safely or get it checked soon"], ["caution", "Have it checked, or act on it"], ["info", "Information only"]];
+  const list = $("knownlist"); list.replaceChildren();
+  for (const [severity, title] of groups) {
+    const names = classes.filter((c) => c !== "none" && (meanings[c] || {}).severity === severity).map((c) => meanings[c].name);
+    if (!names.length) continue;
+    const group = el("div"), ul = el("ul");
+    for (const n of names) ul.append(el("li", "", n));
+    group.append(el("h3", severity, title), ul);
+    list.append(group);
+  }
+}
+
+function watchSections() {
+  // Underline the menu link of the section you are reading. A section counts as "being read" when it crosses
+  // a line about 40% down the screen; at the very bottom of the page, the last link is underlined.
+  const links = [...document.querySelectorAll("nav a")];
+  const mark = (id) => links.forEach((a) => a.classList.toggle("here", a.getAttribute("href") === "#" + id));
+  const seen = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) mark(e.target.id);
+  }, { rootMargin: "-40% 0px -59% 0px" });
+  for (const a of links) seen.observe(document.querySelector(a.getAttribute("href")));
+  addEventListener("scroll", () => {
+    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2) mark(links.at(-1).getAttribute("href").slice(1));
+  }, { passive: true });
+}
+
 async function start() {
-  $("status").textContent = "Loading the model...";
+  setStatus("Loading the model...", true);
+  document.querySelectorAll("button.sample").forEach((b) => (b.disabled = true));
   try {
     [classes, config, meanings] = await Promise.all(["model/classes.json", "model/config.json", "meanings.json"].map((u) => fetch(u).then((r) => r.json())));
     ort.env.wasm.numThreads = 1;                      // plain WebAssembly: works on every host, no special server settings
     renderKnownLights();
     session = await ort.InferenceSession.create("model/model.onnx", { executionProviders: ["wasm"] });
-    $("status").textContent = "";
+    setStatus("");
     $("go").disabled = !$("file").files.length;
+    document.querySelectorAll("button.sample").forEach((b) => (b.disabled = false));
     window.__ready = true;
   } catch (err) {
-    $("status").textContent = ""; $("error").textContent = "Could not load the model: " + err.message;
+    setStatus(""); $("error").textContent = "Could not load the model: " + err.message;
+  }
+}
+
+function setStatus(text, busy = false) {
+  $("status").replaceChildren(...(busy ? [el("span", "spinner")] : []), text);
+}
+
+async function run(source, single, label) {
+  // Analyze a photo (an upload or a sample) and show the results.
+  const buttons = [$("go"), ...document.querySelectorAll("button.sample")];
+  buttons.forEach((b) => (b.disabled = true));
+  $("error").textContent = ""; setStatus(`Analyzing ${label}...`, true); $("result").hidden = true;
+  setDrawMode(false);
+  try {
+    current = await analyze(source, single);
+    window.__lastResult = current;                    // kept so automated tests can read the answers
+    show(current); setStatus("");
+    $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    setStatus(""); $("error").textContent = err.message;
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+    $("go").disabled = !$("file").files.length;
   }
 }
 
 $("file").addEventListener("change", () => { $("go").disabled = !$("file").files.length || !session; });
-$("go").addEventListener("click", async () => {
+$("go").addEventListener("click", () => {
   const file = $("file").files[0];
   if (!file) return;
-  $("go").disabled = true; $("error").textContent = ""; $("status").textContent = "Analyzing..."; $("result").hidden = true;
-  setDrawMode(false);
-  try {
-    const single = document.querySelector('input[name="mode"]:checked').value === "single";
-    current = await analyze(file, single);
-    window.__lastResult = current;                    // kept so automated tests can read the answers
-    show(current); $("status").textContent = "";
-  } catch (err) {
-    $("status").textContent = ""; $("error").textContent = err.message;
-  } finally {
-    $("go").disabled = false;
-  }
+  const single = document.querySelector('input[name="mode"]:checked').value === "single";
+  run(file, single, "your photo");
 });
+for (const b of document.querySelectorAll("button.sample")) {
+  b.addEventListener("click", async () => {
+    try {
+      const blob = await (await fetch(b.dataset.src)).blob();
+      run(blob, false, `the sample photo (${b.dataset.name})`);
+    } catch (err) { $("error").textContent = "Could not load the sample photo."; }
+  });
+}
+watchSections();
 start();

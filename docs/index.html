@@ -3,91 +3,259 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dashboard Light Identifier</title>
+<title>Telltale: dashboard warning light identifier</title>
+<meta name="description" content="Take a photo of your car's dashboard: Telltale finds each lit warning light and names the ones it knows, privately in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap">
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2430; --muted:#5b6675; --line:#d9dee6; --accent:#2457d6;
-          --info:#2457d6; --caution:#b36b00; --warning:#c0262d; --unsure:#7a6a00; --possible:#2f6fb5; }
+  /* ---- style guide: every color, font, radius and shadow comes from these variables ----
+     Color always means something here: green identified, blue possible, amber unsure, red serious.
+     Everything else (buttons, links, text) is ink and gray, so it never competes with a light. */
+  :root { --bg:#f5f6f8; --card:#ffffff; --text:#161c26; --muted:#4f5a69; --line:#dfe3e9;
+          --ink:#161c26; --on-ink:#ffffff; --focus:#2457d6;
+          --panel:#0e141d; --panel-2:#1a2535; --panel-text:#eef2f7; --panel-muted:#aab5c5;
+          --info:#2457d6; --ok:#1a7f37; --possible:#2f6fb5; --unsure:#8a6d00; --caution:#b36b00; --warning:#c0262d;
+          --display:"Barlow Semi Condensed", system-ui, sans-serif;
+          --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.05); }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#12161c; --card:#1b212a; --text:#e8ecf2; --muted:#9aa5b5; --line:#2c3541; --accent:#6f9bff;
-            --info:#6f9bff; --caution:#f0b04a; --warning:#ff6b73; --unsure:#d8c85a; --possible:#7fb4ff; } }
+    :root { --bg:#0f141b; --card:#18202a; --text:#e8ecf2; --muted:#a3adbb; --line:#2a3440;
+            --ink:#e8ecf2; --on-ink:#10141a; --focus:#7fb4ff; --panel:#080c12; --panel-2:#121b28;
+            --info:#7fb4ff; --ok:#4cc970; --possible:#7fb4ff; --unsure:#d8c85a; --caution:#f0b04a; --warning:#ff6b73;
+            --shadow:0 1px 2px rgba(0,0,0,.4); } }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
-  main { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
-  h1 { font-size:1.5rem; margin:0 0 4px; }
-  p.sub { color:var(--muted); margin:0 0 20px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 18px; font-size:1rem; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:default; }
-  input[type=file] { max-width:100%; }
-  img#photo { max-width:100%; border-radius:8px; display:block; }
-  .light h3 { margin:0 0 2px; font-size:1.05rem; }
-  .chip { display:inline-block; font-size:.75rem; border:1px solid currentColor; border-radius:99px; padding:0 8px; margin-left:6px; }
-  .info { color:var(--info); } .caution { color:var(--caution); } .warning { color:var(--warning); } .unsure { color:var(--unsure); } .possible { color:var(--possible); }
-  .muted { color:var(--muted); font-size:.9rem; }
-  #error { color:var(--warning); }
-  #frame { position:relative; display:inline-block; max-width:100%; }
+  html { scroll-behavior: smooth; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap, main { max-width:860px; margin:0 auto; padding:0 16px; }
+  main { padding-bottom:48px; }
+  a { color:inherit; text-underline-offset:3px; }
+  h1, h2, h3, .num, nav a { font-family:var(--display); }
+  h2 { font-size:1.65rem; font-weight:700; line-height:1.2; margin:0 0 12px; }
+  section { margin-top:44px; scroll-margin-top:64px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:14px; box-shadow:var(--shadow); }
+  .muted { color:var(--muted); font-size:.92rem; }
+  .card > p:first-child { margin-top:0; } .card > p:last-child { margin-bottom:0; }
+  .eyebrow { font-size:.78rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
+
+  /* the dark band at the top, like an instrument panel at night */
+  .hero { background:radial-gradient(120% 140% at 85% 0%, var(--panel-2), var(--panel) 60%); color:var(--panel-text); padding:34px 0 30px; }
+  .brand { display:flex; gap:16px; align-items:center; }
+  .brand svg { flex:none; }
+  .hero .eyebrow { color:var(--panel-muted); margin:0; }
+  .hero h1 { font-size:3rem; font-weight:700; line-height:1; margin:2px 0 0; letter-spacing:.01em; }
+  .tagline { font-size:1.1rem; color:var(--panel-text); margin:18px 0 0; max-width:36em; }
+  .key { list-style:none; display:flex; flex-wrap:wrap; gap:8px 22px; padding:0; margin:18px 0 0; color:var(--panel-muted); font-size:.92rem; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px; vertical-align:0; }
+  .dot.red { background:#ff4d4d; box-shadow:0 0 8px 2px rgba(255,77,77,.7); }
+  .dot.amber { background:#ffb020; box-shadow:0 0 8px 2px rgba(255,176,32,.7); }
+  .dot.green { background:#3ddc6b; box-shadow:0 0 8px 2px rgba(61,220,107,.6); }
+  .dot.blue { background:#4d8dff; box-shadow:0 0 8px 2px rgba(77,141,255,.7); margin-left:-4px; }
+
+  /* navigation: stays at the top while you scroll, and underlines the section you are in */
+  nav { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); }
+  nav .wrap { display:flex; gap:22px; overflow-x:auto; white-space:nowrap; }
+  nav a { text-decoration:none; color:var(--muted); font-size:1.05rem; font-weight:600; padding:10px 0 8px; border-bottom:2px solid transparent; }
+  nav a:hover { color:var(--text); }
+  nav a.here { color:var(--text); border-bottom-color:var(--text); }
+
+  /* the upload card */
+  .lead { margin:0 0 16px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  button { font:inherit; font-weight:600; background:var(--ink); color:var(--on-ink); border:1px solid var(--ink); border-radius:10px; padding:10px 18px; cursor:pointer; }
+  button:disabled { opacity:.45; cursor:default; }
+  button.secondary, button.sample { background:transparent; color:var(--text); border-color:var(--line); }
+  button.secondary:hover:not(:disabled), button.sample:hover:not(:disabled) { border-color:var(--text); }
+  button.sample { padding:7px 14px; font-size:.95rem; }
+  button:focus-visible, a:focus-visible, summary:focus-visible, .light:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+  input[type=file] { max-width:100%; color:var(--muted); }
+  input[type=file]::file-selector-button { font:inherit; font-weight:600; color:var(--text); background:transparent; border:1px solid var(--line);
+                                           border-radius:10px; padding:9px 16px; margin-right:10px; cursor:pointer; }
+  fieldset.mode { border:0; padding:0; margin:16px 0 0; }
+  fieldset.mode legend { font-size:.9rem; color:var(--muted); padding:0; margin-bottom:4px; }
+  fieldset.mode label { display:block; margin:2px 0; }
+  .samples { margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
+  #status { display:flex; align-items:center; gap:8px; min-height:1.5em; margin:12px 0 0; }
+  .spinner { width:16px; height:16px; border:2px solid var(--line); border-top-color:var(--text); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #error { color:var(--warning); margin:6px 0 0; }
+  #status:empty, #error:empty { display:none; }
+  #result { scroll-margin-top:56px; }
+
+  /* results */
+  .photo-wrap { text-align:center; background:#0b0f15; border-radius:10px; }
+  #frame { position:relative; display:inline-block; max-width:100%; vertical-align:top; }
+  #frame img { max-width:100%; max-height:70vh; border-radius:10px; display:block; }
   #frame.drawing { cursor:crosshair; touch-action:none; }          /* on phones: drag draws instead of scrolling */
   #frame.drawing img { outline:3px solid #d97cff; }
   #band { position:absolute; border:2px dashed #d97cff; background:rgba(217,124,255,.15); pointer-events:none; }
+  #hl { position:absolute; border:3px solid #fff; box-shadow:0 0 0 2px #000, 0 0 12px rgba(255,255,255,.8); border-radius:4px; pointer-events:none; }
+  .legend { margin:12px 0 0; }
   .legend span { white-space:nowrap; margin-right:12px; }
-  .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .swatch { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+  .tools { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin-top:12px; }
+  #summary { margin:6px 0 16px; }
+  #summary .found { margin:0 0 8px; font-weight:600; }
+  .pills { display:flex; flex-wrap:wrap; gap:8px; }
+  .pill { display:inline-flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line); border-radius:99px; padding:5px 13px 5px 11px; font-size:.95rem; }
+  .pill-dot { width:9px; height:9px; border-radius:50%; background:currentColor; }   /* only the dot takes the result's color */
+  .pill-text { color:var(--text); }
+  .pill b { font-family:var(--display); font-size:1.1rem; font-weight:700; }
+  .mine { color:#d97cff; }
+  .light h3 { margin:0 0 4px; font-size:1.25rem; font-weight:600; }
+  .light { cursor:default; }
+  .light.linked { border-color:var(--text); }
+  .chip { display:inline-block; font-family:system-ui,sans-serif; font-size:.75rem; font-weight:600; border:1px solid currentColor; border-radius:99px; padding:0 8px; margin-left:6px; vertical-align:3px; }
+  .ok { color:var(--ok); } .info { color:var(--info); } .caution { color:var(--caution); } .warning { color:var(--warning); } .unsure { color:var(--unsure); } .possible { color:var(--possible); }
   .muted-title { color:var(--muted); }
   details.card summary { cursor:pointer; font-weight:600; }
-  details.card .card { margin:12px 0 0; }
-  .tools { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin-top:12px; }
-  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
-  fieldset.mode { border:0; padding:0; margin:12px 0 0; }
-  fieldset.mode legend { font-size:.9rem; color:var(--muted); padding:0; margin-bottom:4px; }
-  fieldset.mode label { display:block; margin:2px 0; }
-  #known summary { cursor:pointer; font-weight:600; }
-  #knownlist h4 { margin:12px 0 4px; font-size:.95rem; }
-  #knownlist ul { margin:0; padding-left:20px; }
+  details.card .card { margin:12px 0 0; box-shadow:none; }
+  @keyframes rise { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  #lights > .card { animation:rise .25s ease-out both; }
+  @media (prefers-reduced-motion: reduce) { #lights > .card, .spinner { animation:none; } html { scroll-behavior:auto; } }
+
+  /* the information sections */
+  .steps { list-style:none; padding:0; margin:0 0 14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
+  .steps li { margin:0; }
+  .steps h3 { font-size:1.2rem; margin:2px 0 4px; }
+  .steps p { margin:0; }
+  .num { display:block; font-size:2rem; font-weight:700; line-height:1; color:var(--muted); }
+  .groups { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; }
+  .groups h3 { font-size:1.1rem; font-weight:600; line-height:1.3; margin:0 0 6px; }
+  .groups ul { margin:0; padding-left:20px; }
+  .limits ul { margin:6px 0 0; padding-left:20px; }
+  footer { margin-top:44px; padding-top:18px; border-top:1px solid var(--line); }
+  footer p { margin:6px 0; }
+  @media (max-width: 520px) { .hero h1 { font-size:2.5rem; } .hero { padding:26px 0 24px; } h2 { font-size:1.45rem; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>Dashboard Light Identifier</h1>
-  <p class="sub">Upload a clear, straight photo of your instrument cluster with the lights on. The app finds each lit light and names it, or says it is unsure.</p>
-
-  <div class="card">
-    <input id="file" type="file" accept="image/*">
-    <button id="go" disabled>Identify lights</button>
-    <fieldset class="mode">
-      <legend>What is in your photo?</legend>
-      <label><input type="radio" name="mode" value="dashboard" checked> The whole dashboard: find the lights for me</label>
-      <label><input type="radio" name="mode" value="single"> One light, up close</label>
-    </fieldset>
-    <p id="status" class="muted"></p>
-    <p id="error"></p>
-  </div>
-
-  <details class="card" id="known">
-    <summary>Which lights can it recognize?</summary>
-    <div id="knownlist"></div>
-    <p class="muted">Any other light (for example traction control, seat belt or engine temperature) is shown as "unsure" or
-      "probably not a warning light". Your owner's manual lists every light in your car.</p>
-  </details>
-  <div id="result" hidden>
-    <div class="card">
-      <div id="frame"><img id="photo" alt="Your photo with numbered boxes around each light found"><div id="band" hidden></div></div>
-      <p class="muted legend">
-        <span><i class="swatch" style="background:#3cc85a"></i>identified</span>
-        <span><i class="swatch" style="background:#5aa9ff"></i>possible</span>
-        <span><i class="swatch" style="background:#ffaa00"></i>unsure</span>
-        <span><i class="swatch" style="border:1px dashed #999"></i>probably not a warning light</span>
-        <span><i class="swatch" style="background:#d97cff"></i>your box</span>
-      </p>
-      <div class="tools">
-        <button id="draw" class="secondary">Draw a box around a light</button>
-        <span id="drawhint" class="muted" hidden>Drag a box around one light on the photo above.</span>
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">
+      <svg width="52" height="52" viewBox="0 0 44 44" aria-hidden="true">
+        <rect width="44" height="44" rx="11" fill="#1f2b3d"/>
+        <path d="M10 29a12 12 0 0 1 24 0" fill="none" stroke="#8aa0bd" stroke-width="3" stroke-linecap="round"/>
+        <path d="M22 29l7-8" stroke="#e8ecf2" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="22" cy="29" r="2.5" fill="#e8ecf2"/>
+        <circle cx="33" cy="12" r="5" fill="#f0a020"/><path d="M33 9.2v3.2M33 14.4v.2" stroke="#1f2b3d" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <p class="eyebrow">Dashboard warning light identifier</p>
+        <h1>Telltale</h1>
       </div>
     </div>
-    <div id="lights"></div>
+    <p class="tagline">Take a photo of your dashboard. Telltale finds each lit warning light and tells you what it means.</p>
+    <ul class="key" aria-label="What the colors of warning lights usually mean">
+      <li><i class="dot red"></i>Red: serious, stop safely</li>
+      <li><i class="dot amber"></i>Amber: have it checked soon</li>
+      <li><i class="dot green"></i><i class="dot blue"></i>Green or blue: information</li>
+    </ul>
   </div>
+</header>
 
-  <p class="muted" id="note"></p>
-  <p class="muted">Privacy: the analysis runs on your own device. Your photo is never uploaded. This is a portfolio project, not a safety tool.</p>
-  <p class="muted"><a href="https://github.com/TylerBFabela/warning-light-identifier">Source code, results and limitations</a> · <a href="https://github.com/TylerBFabela/warning-light-identifier/blob/main/ATTRIBUTION.md">Icon credits</a></p>
+<nav aria-label="Sections">
+  <div class="wrap">
+    <a href="#try">Try it</a><a href="#how">How it works</a><a href="#why">Why</a><a href="#known">What it knows</a><a href="#limits">Limits</a><a href="#about">About</a>
+  </div>
+</nav>
+
+<main>
+  <section id="try">
+    <h2>Try it</h2>
+    <div class="card">
+      <p class="lead">Use a photo taken straight on, with the lights on, while you are safely parked. Your photo stays on your device.</p>
+      <div class="row">
+        <input id="file" type="file" accept="image/*">
+        <button id="go" disabled>Identify lights</button>
+      </div>
+      <fieldset class="mode">
+        <legend>What is in your photo?</legend>
+        <label><input type="radio" name="mode" value="dashboard" checked> The whole dashboard: find the lights for me</label>
+        <label><input type="radio" name="mode" value="single"> One light, up close</label>
+      </fieldset>
+      <div class="samples row">
+        <span class="muted">No photo at hand? Try one of mine:</span>
+        <button class="sample" data-src="samples/sample_gauge.jpg" data-name="one gauge">One gauge</button>
+        <button class="sample" data-src="samples/sample_startup.jpg" data-name="busy dashboard at start-up">Busy dashboard</button>
+      </div>
+      <p id="status" class="muted" role="status" aria-live="polite"></p>
+      <p id="error" role="alert"></p>
+    </div>
+
+    <div id="result" hidden>
+      <div class="card">
+        <div class="photo-wrap"><div id="frame"><img id="photo" alt="Your photo with a box around each lit spot"><div id="hl" hidden></div><div id="band" hidden></div></div></div>
+        <p class="muted legend">
+          <span><i class="swatch" style="background:#3cc85a"></i>identified</span>
+          <span><i class="swatch" style="background:#5aa9ff"></i>possible</span>
+          <span><i class="swatch" style="background:#ffaa00"></i>unsure</span>
+          <span><i class="swatch" style="border:1px dashed #999"></i>probably not a warning light</span>
+          <span><i class="swatch" style="background:#d97cff"></i>your box</span>
+        </p>
+        <div class="tools">
+          <button id="draw" class="secondary">Draw a box around a light</button>
+          <span id="drawhint" class="muted" hidden>Drag a box around one light on the photo above.</span>
+        </div>
+      </div>
+      <div id="summary" aria-live="polite"></div>
+      <div id="lights"></div>
+      <p class="muted" id="note"></p>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <div class="card">
+      <ol class="steps">
+        <li><span class="num">01</span><h3>Find</h3><p>It looks for bright, colorful spots, the way a lit icon stands out on a dark panel, and joins the pieces of each icon together.</p></li>
+        <li><span class="num">02</span><h3>Crop</h3><p>Each spot is cut out as a small square image, so every light is judged on its own.</p></li>
+        <li><span class="num">03</span><h3>Classify</h3><p>A small neural network (MobileNetV3) names the light, or says it is unsure. It learned from generated images of standard symbols in many styles, colors and lighting conditions.</p></li>
+      </ol>
+      <p class="muted">Everything runs in your browser: the photo never leaves your device.</p>
+    </div>
+  </section>
+
+  <section id="why">
+    <h2>Why this exists</h2>
+    <div class="card">
+      <p>Even though there are many drivers out on the road, some may not have taken the time to sift through their owner's manual, and
+        some may not know the meaning of every symbol on their dashboard. To provide quick answers to safety concerns without needing to
+        immediately consult the manual or describe a dashboard icon to a search engine, Telltale offers an intuitive way to figure out what
+        a symbol could mean. Start by uploading a photo, and it will identify each symbol and its urgency. Of course, AI can be wrong, so
+        check anything it marks as "possible" or "unsure" against your owner's manual.</p>
+    </div>
+  </section>
+
+  <section id="known">
+    <h2>What it knows</h2>
+    <div class="card">
+      <div id="knownlist" class="groups"></div>
+      <p class="muted">Any other light (for example traction control, seat belt or engine temperature) is shown as "unsure" or
+        "probably not a warning light". Your owner's manual lists every light in your car.</p>
+    </div>
+  </section>
+
+  <section id="limits">
+    <h2>Limits</h2>
+    <div class="card limits">
+      <p>It is a learning project, not a safety tool. On the dashboard photos I tested it on, it named about 3 in 4 lights, and when it said
+        "identified" it was right every time. Those photos also guided its design, so expect lower results on cars it has not seen.</p>
+      <ul>
+        <li>Bright daylight washes out the colors of the lights, so it can miss them: use "Draw a box".</li>
+        <li>It knows 12 common lights. Anything else is shown as unsure.</li>
+        <li>Blurry, angled or very dark photos make every step less reliable.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer id="about">
+    <p><strong>About this project.</strong> I built it to learn how a machine-learning product is made from start to finish: generating
+      training data, training and testing a model, and running it privately in your browser.</p>
+    <p class="muted"><a href="https://github.com/TylerBFabela/warning-light-identifier">Source code</a> ·
+      <a href="https://github.com/TylerBFabela/warning-light-identifier/blob/main/EXPERIMENTS.md">How it was tested</a> ·
+      <a href="https://github.com/TylerBFabela/warning-light-identifier/blob/main/ATTRIBUTION.md">Icon credits</a></p>
+    <p class="muted">General information only, not a diagnosis. Your owner's manual is the authority for your car.</p>
+  </footer>
 </main>
 <script src="ort/ort.wasm.min.js"></script>
 <script src="app.js"></script>
