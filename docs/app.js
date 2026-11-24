@@ -287,7 +287,8 @@ function pin(c, box) {
   if (pinned && pinned.card === c) { unpin(); return; }          // clicking the same card again clears it
   pinned = { card: c, box };
   markCard(c); showHighlight(box, true);
-  $("frame").scrollIntoView({ behavior: "smooth", block: "center" });
+  const r = $("frame").getBoundingClientRect();                  // on wide screens the photo is already in view:
+  if (r.top < 50 || r.bottom > innerHeight) $("frame").scrollIntoView({ behavior: "smooth", block: "center" });   // scroll only if needed
 }
 
 function unpin() { pinned = null; endPreview(); }
@@ -314,6 +315,7 @@ function renderSummary(view) {
 
 function show(view) {
   $("photo").src = annotate(view);
+  $("result").style.setProperty("--ratio", (view.bitmap.width / view.bitmap.height).toFixed(4));   // photo shape, for the wide-screen layout
   pinned = null; hideHighlight();
   renderSummary(view);
   const box = $("lights"); box.replaceChildren();

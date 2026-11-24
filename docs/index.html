@@ -145,6 +145,17 @@
   .limits ul { margin:6px 0 0; padding-left:20px; }
   footer { margin-top:44px; padding-top:18px; border-top:1px solid var(--line); }
   footer p { margin:6px 0; }
+    /* wide screens: the photo on the left stays in view while the results scroll on the right.
+     The results area is allowed to be wider than the text column, so the photo is not tiny. */
+  @media (min-width: 1000px) {
+    /* photo column: as wide as the photo needs at the height that fits the screen (--ratio = width / height, set in app.js),
+       between 400px (room for the legend and the button) and 58%. Tall photos get a narrow column, the results the rest. */
+    #result:not([hidden]) { display:grid; grid-template-columns:max(400px, min(58%, calc((100vh - 250px) * var(--ratio, 1.4) + 42px))) minmax(340px, 1fr);
+                            gap:20px; align-items:start;
+                            width:min(1180px, calc(100vw - 48px)); margin-left:calc(50% - min(590px, 50vw - 24px)); }
+    .result-photo { position:sticky; top:62px; margin-bottom:0; }
+    .result-photo #frame img { max-height:calc(100vh - 250px); }
+  }
   @media (max-width: 520px) { .hero h1 { font-size:2.5rem; } .hero { padding:26px 0 24px; } h2 { font-size:1.45rem; } }
 </style>
 </head>
@@ -208,7 +219,7 @@
     </div>
 
     <div id="result" hidden>
-      <div class="card">
+      <div class="card result-photo">
         <div class="photo-wrap"><div id="frame"><img id="photo" alt="Your photo with a box around each lit spot"><div id="hl" hidden></div><div id="band" hidden></div></div></div>
         <p class="muted legend">
           <span><i class="swatch" style="background:#3cc85a"></i>identified</span>
@@ -222,9 +233,11 @@
           <span id="drawhint" class="muted" hidden>Drag a box around one light on the photo above.</span>
         </div>
       </div>
-      <div id="summary" aria-live="polite"></div>
-      <div id="lights"></div>
-      <p class="muted" id="note"></p>
+      <div class="result-list">
+        <div id="summary" aria-live="polite"></div>
+        <div id="lights"></div>
+        <p class="muted" id="note"></p>
+      </div>
     </div>
   </section>
 
@@ -263,7 +276,7 @@
   <section id="limits">
     <h2>Limits</h2>
     <div class="card limits">
-      <p>It is a learning project, not a safety tool. On the dashboard photos it was tested on, it named about 3 in 4 lights, and when it said
+      <p>This is a learning project, not a safety tool. On the dashboard photos it was tested on, the CNN named about 3 in 4 lights, and when it said
         "identified" it was right every time. Those photos also guided its design, so expect lower results on cars it has not seen.</p>
       <ul>
         <li>Bright daylight washes out the colors of the lights, so it can miss them: use "Draw a box".</li>
