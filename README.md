@@ -1,96 +1,135 @@
-# Dashboard warning-light identifier
+# Telltale: dashboard warning light identifier
 
-**[Live demo](https://tylerbfabela.github.io/warning-light-identifier/)**: upload a photo of a car's instrument cluster. It runs in your
-browser, and your photo never leaves your device.
+**[Try it live](https://tylerbfabela.github.io/warning-light-identifier/)**: take a photo of a car's instrument cluster, and
+Telltale finds each lit warning light, names the ones it knows, and says how urgent each one is. Everything runs in the
+browser: the photo never leaves the device.
 
-The app finds each lit warning light in a photo and names it, or says it is unsure. It is a portfolio prototype, **not
-safety advice**: when a warning light is on and you are unsure, consult your owner's manual or a mechanic.
+It is a learning project, **not a safety tool**. When a warning light is on and you are unsure, check your owner's manual or
+ask a mechanic.
 
-## Status: working end to end, accuracy on new dashboards is limited
-The full pipeline works and is deployed. The model is the weak part, and I measured exactly how weak.
-
-| Test set | What it is | Crops | Overall | Real lights right | Non-lights right |
-|---|---|---|---|---|---|
-| Mazda CX-30, day | used while tuning (optimistic) | 92 (34 lights, 58 non-lights) | 77% | 22 of 34 (65%) | 84% |
-| Toyota RAV4, day | a different car, evaluated once | 50 (20 lights, 30 non-lights) | 70% | 6 of 20 (30%) | 97% |
-| Both cars, night | newer photos | 54 (20 lights, 34 non-lights) | 61% | 3 of 20 (15%) | 88% |
-
-Read the "real lights right" column, not "overall": non-lights are over half of every set. Crops were sorted by hand using
-[LABELING.md](LABELING.md). Only two cars, and one class (parking brake) has 11 near-duplicate crops, so these are small
-samples. Numbers are the model's top guess, before the confidence threshold.
-
-**End to end on one fully labeled photo** (Mazda bulb check, 7 real lights, 26 boxes): the top guess was right for 4 of 7
-(airbag, oil pressure, parking brake, check engine) but only at 40-79% confidence. ABS and tire pressure were called "not a
-light" at 94-96%, and BRAKE was read as parking brake. At the app's 0.9 threshold it made two confident claims and both
-were wrong: a clipped, pink fragment read as "parking brake" and clipped "HOLD" text read as "headlights".
-
-The demo shows three tiers: *identified* (confidence 90% or more, with advice), *possible* (40-90%, a low-confidence guess
-with no advice), and *unsure* (everything else, including "not a known light").
-
-## Known limitations
-- The light finder is a color-and-brightness rule. It misses washed-out or dim icons, merges icons into glow
-  (the Toyota's orange backlight), boxes gauge needles and numbers, and sometimes cuts an icon in half. A clipped icon
-  can be named confidently and wrongly.
-- Trained only on synthetic images; tested on two cars, so new dashboards often fall outside what it has seen.
-- 12 light types. Red and amber versions of a symbol are treated as different lights. The circled "!" (BRAKE) and circled
-  "P" (PARK) are not told apart reliably, so the app gives the same advice for both.
-- Phone cameras shift colors (red lights photograph orange at night), which hurts night photos.
+## Why
+Many drivers never read their owner's manual, and many dashboard symbols look alike. A light's color says how urgent it is,
+but only the symbol says what is wrong, and a symbol is hard to describe to a search engine. Telltale lets you search with a
+photo instead, and it says so when it is not sure.
 
 ## How it works
-1. **Find** bright, colorful spots (`src/find_lights.py`, ported to JavaScript in `docs/app.js`).
-2. **Crop** a square around each spot from the full-resolution photo.
-3. **Classify** each crop with a small CNN (242k parameters, 96x96 input) into 12 light types or "none".
-4. **Decide**: name the light only if the model is confident and the answer is a real light, otherwise "unsure".
+1. **Find** (`src/find_lights.py`, ported to `docs/app.js`): bright, colorful spots are grouped into one box per icon. Big,
+   thin shapes (needles, gauge arcs) are dropped, and each box is made square with a margin around the icon.
+2. **Crop**: each box is cut from the full-resolution photo and resized to 96×96 pixels.
+3. **Classify**: MobileNetV3-small, pretrained on ImageNet and fine-tuned here, scores 12 light types plus "none" (not one
+   of the 12).
+4. **Decide**: 1.0 is first subtracted from the "none" score, so real lights are not dismissed too readily. Then:
+   - **identified**: a light type at 90% confidence or more. Only these get advice.
+   - **possible**: 40-90%, shown as a low-confidence guess without advice.
+   - **unsure** or **probably not a warning light**: everything else.
+5. **Draw a box**: if the finder misses a light (for example in bright daylight), the visitor can draw a box around it, and
+   only that area is classified.
 
-The model is trained on synthetic images made from open-licensed icons (`src/make_synth.py`): icons are recolored, warped,
-blurred and glowed on dashboard-like backgrounds, with extra "not a known light" examples (other symbols, gauge needles
-and zones, orange displays, text, glare). Real photos are used only for validation and testing, split by car.
+The model runs in the browser with ONNX Runtime Web, so the site is a static page on GitHub Pages, with no server.
 
-## What I tried (and what the evidence said)
-| Step | Result on real Mazda crops |
+## Results
+Measured on development sets: 113 real lights and 134 spots that are not warning lights, cropped from a public Roboflow
+dataset and from photos of two cars (day and night). The settings were chosen on these same sets, so the numbers are
+optimistic; a fresh test set is the next step. Every experiment is in [EXPERIMENTS.md](EXPERIMENTS.md).
+
+| With the site's settings (model v5b) | Count |
 |---|---|
-| v1: plain synthetic icons | 18% overall; never said "none" (0 of 58) |
-| v2: realistic negatives, 3x "none", low-res, centered icons | 41% |
-| v3: + color jitter, pale glare backgrounds, printed BRAKE/PARK words | 77% (the deployed model) |
-| Small CNN vs residual network | same accuracy on synthetic data, 3.3x slower, so small CNN |
-| Wider color range + blown-out glow (small proxy set) | about +3 points, not adopted |
-| Real crops from one car in training, tested on the other (small proxy set) | no gain (21% to 21%) |
-| Finder fixes tried: pixel-count floor, local contrast, re-checking oversized blobs, top-hat filter | none shipped: each dropped real icons, left glow merged, or boxed gauge numbers |
+| Real lights named correctly | 87 of 113 (77%) |
+| ... of those, shown as "identified" | 39, none of them wrong |
+| Non-lights shown as a light | 10 of 134, all as a low-confidence "possible" |
 
-What it points to: the bottleneck is how many different dashboards the model has seen, not tuning on these two.
+How the model improved (real lights named correctly, before the "none" adjustment, average of 3 training runs):
 
-## Decisions I can defend
-- **PyTorch and a small CNN**: fits a laptop, trains in minutes, ResNet gave no gain.
-- **Synthetic training data**: no free, licensed dataset of dashboard icons with "none" examples.
-- **A "none" class plus a confidence threshold**: refusing to guess is safer than guessing.
-- **Test split by car, not by photo**: crops from one car look alike, so mixing them would inflate results.
-- **No horizontal flips** (left and right arrows differ); color jitter only within a light's color family.
-- **Merged advice for BRAKE and PARK**: I could not tell them apart, and the safe advice is the same.
-- **In-browser deployment (ONNX + GitHub Pages)**: free, permanent, no server, and photos stay on the user's device.
+| Version | Change | Lights named |
+|---|---|---|
+| v3 | small CNN trained from scratch on synthetic images | 39 of 114 (one run) |
+| v4 | MobileNetV3-small, pretrained on ImageNet | 56.3 of 114 |
+| v5a | solid and outline versions of each drawing | 68.0 of 113 |
+| v5b | 14 more drawings, text-only BRAKE / ABS / PARK, side lights | 75.0 of 113 |
+
+One crop was relabeled between v5a and v5b, so the total went from 114 to 113; v5a was re-scored on the corrected labels.
+
+The light finder, on 16 Roboflow photos with hand-drawn boxes (53 lights):
+
+| Finder | Clean box | Poor box (merged, too big or cut off) | Missed |
+|---|---|---|---|
+| first version | 19 | 29 | 5 |
+| current | 31 | 15 | 7 |
+
+## Decisions and why
+- **Synthetic training data.** No free, licensed set of dashboard-icon crops with "not a light" examples existed, so
+  `src/make_synth.py` draws licensed icons thousands of times: recolored within their color family, warped, blurred and
+  glowing, on generated backgrounds, with phone-like noise and compression. Each option was added to fix a measured failure.
+- **A "none" class with realistic examples.** The finder also boxes needles, gauge zones, displays, text and glare, so the
+  model learns to answer "not one of mine".
+- **Real photos for evaluation only**, split by source photo or by car, so near-identical crops never end up on both sides
+  of a comparison.
+- **A pretrained MobileNetV3-small.** The same network trained from a random start did no better than the small CNN;
+  starting from ImageNet weights did. It is about 3.7 MB and fast in a browser.
+- **Three training runs per version.** One run can be lucky, so versions are compared on the average.
+- **No mirroring, and hues kept within each color family**: left and right arrows differ, and color means urgency.
+- **A rule-based finder plus "Draw a box".** A trained detector needs box-labeled photos that may be used for training, and
+  none were available. The rules are fast, explainable and measured.
+- **Only "identified" lights get advice**: a refusal is safer than a confident wrong answer.
+- **In the browser (ONNX + GitHub Pages)**: free to host, and the photo stays on the visitor's device. The JavaScript finder
+  gives the same boxes as the Python one on all 36 test photos.
+
+## Limitations
+- Bright daylight washes out the lights' colors, so the finder can miss them.
+- It knows 12 light types; any other light is shown as unsure.
+- The circled "!" (brake system) and circled "P" (parking brake) are still the most common mix-up between two lights.
+- Phone cameras shift colors at night (red lights can photograph as orange).
+- The advice text in `docs/meanings.json` is general and is still being checked against owner's manuals.
+- Tested on two cars and one public dataset.
+
+## Repository
+| Path | What it is |
+|---|---|
+| `docs/` | the website: `index.html`, `app.js`, the model (`docs/model/`), the advice text (`meanings.json`), sample photos |
+| `src/make_synth.py`, `src/make_text_icons.py`, `src/svg_to_png.py` | synthetic training images, and preparing the icons for them |
+| `src/train.py`, `src/common.py` | training, and the model definitions |
+| `src/export_onnx.py` | converts a trained model for the browser and checks that it gives the same answers |
+| `src/find_lights.py`, `src/pipeline.py`, `src/predict.py` | the finder and the photo-to-results pipeline in Python |
+| `src/evaluate.py`, `src/probe_no_none.py`, `src/compare_models.py`, `src/show_mistakes.py` | testing on real crops |
+| `src/finder_eval.py`, `src/finder_sweep.py`, `src/finder_compare.py` | measuring the light finder |
+| `src/yolo_to_crops.py`, `mapping.json`, `LABELING.md` | turning a box-labeled dataset into labeled crops, and the labeling rules |
+| `icons/classes.json` | the 12 light types and their colors |
+| `EXPERIMENTS.md` | every experiment, with the numbers |
 
 ## Run it
-In-browser demo, locally:
+The website, locally (then open http://localhost:8000):
 
-    python -m http.server 8000 --directory docs      # then open http://localhost:8000
+```bash
+python -m http.server 8000 --directory docs
+```
 
-Python side (needs the icons: see ATTRIBUTION.md, then `python src/svg_to_png.py icons_raw icons`):
+The Python side. The icons are not in the repository; [ATTRIBUTION.md](ATTRIBUTION.md) lists the files.
 
-    python3 -m venv .venv && source .venv/bin/activate
-    pip install -r requirements.txt
-    python src/make_synth.py data_v3 600 --icons icons --hard-negatives --none-factor 3 --lowres --centered --color-jitter --bright-bg --labels --seed 2
-    python src/train.py data_v3 --out models/v3
-    python src/evaluate.py models/v3 real_dev            # your own sorted crops, see LABELING.md
-    python src/show_mistakes.py models/v3 real_dev mistakes.png
-    python src/export_onnx.py models/v3 docs/model       # the file the web demo loads
-    python src/predict.py models/v3 photo.jpg            # command-line version
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python src/svg_to_png.py icons_raw icons            # downloaded SVG icons -> PNG
+python src/make_text_icons.py icons                 # text-only BRAKE / ABS / PARK icons
+python src/make_synth.py data_v5b 600 --icons icons --hard-negatives --none-factor 3 --lowres --centered --color-jitter --bright-bg --labels --styles --seed 2
+python src/train.py data_v5b --arch mobilenet_v3_small --pretrained --epochs 12 --lr 1e-3 --seed 1 --out models/v5b_s1
+python src/evaluate.py models/v5b_s1 real_dev       # a folder of your own labeled crops (see LABELING.md)
+python src/export_onnx.py models/v5b_s1 docs/model  # the files the website loads; keeps the site's settings
+python src/predict.py models/v5b_s1 photo.jpg       # the whole pipeline from the command line
+```
 
-There is also a FastAPI version (`uvicorn app:app`, with a `Dockerfile` that I have not built or tested yet).
-
-## Data, licenses and privacy
-Icons come from Wikimedia Commons: see [ATTRIBUTION.md](ATTRIBUTION.md). My dashboard photos and sorted crops are not
-included. Code is MIT-licensed (see LICENSE). The trained model in `docs/model/` is derived from CC BY-SA icons and is
-released under CC BY-SA 4.0 with the credits in ATTRIBUTION.md. The demo processes your photo on your device only.
+## Licenses, credits and privacy
+- Code: MIT (see [LICENSE](LICENSE)).
+- Icons: Wikimedia Commons, credited in [ATTRIBUTION.md](ATTRIBUTION.md). The trained model in `docs/model/` is derived from
+  CC BY-SA icons, so it is released under CC BY-SA 4.0.
+- The text-only icons are drawn with Pillow's built-in font. The site's heading font is Barlow Semi Condensed (SIL Open Font
+  License), loaded from Google Fonts. ONNX Runtime Web (MIT) is in `docs/ort/`.
+- Photos: the author's own dashboard photos and crops are not in the repository, except the two sample photos in
+  `docs/samples/`. The Roboflow crops were used for evaluation only and are not distributed.
+- The website processes photos on the visitor's device only.
 
 ## Next steps
-Photograph many more cars; test a pretrained backbone; replace the finder with a trained detector; add more icon artwork
-variants per class; add automated tests and CI.
+- A fresh test set, never used for any decision.
+- Check the advice text against owner's manuals.
+- More distinct drawings for the weakest classes (battery, oil pressure).
+- A trained light finder, if box-labeled photos that allow training become available.
+- Automated tests: the browser-against-Python finder check and the sample photos, run on every change.

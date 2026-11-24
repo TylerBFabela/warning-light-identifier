@@ -25,7 +25,12 @@ try:
 except TypeError:                                                                  # older PyTorch has no dynamo option
     torch.onnx.export(model, dummy, out / "model.onnx", **options)
 shutil.copy(source / "classes.json", out / "classes.json")
-(out / "config.json").write_text(json.dumps({"arch": cfg["arch"], "img": size, "threshold": cfg.get("threshold", 0.8)}, indent=2))
+config_path = out / "config.json"
+site = json.loads(config_path.read_text()) if config_path.exists() else {}   # settings chosen for the website: keep them
+site.update({"arch": cfg["arch"], "img": size})                              # facts about the new model: replace them
+site.setdefault("threshold", cfg.get("threshold", 0.8))                      # only used when there is no website setting yet
+config_path.write_text(json.dumps(site, indent=2))
+print(f"kept the website settings: {({k: v for k, v in site.items() if k not in ('arch', 'img')})}")
 print(f"wrote {out / 'model.onnx'} ({(out / 'model.onnx').stat().st_size / 1024:.0f} KB)")
 
 try:
